@@ -1,8 +1,14 @@
 
 'use server';
 import { db } from '@/lib/firebase';
-import type { UserProfile, UserProfileUpdateData } from '@/types';
+import type { UserProfile, UserProfileUpdateData, NotificationPreferences } from '@/types';
 import { doc, setDoc, getDoc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
+
+const defaultNotificationPreferences: NotificationPreferences = {
+  onOverspending: true,
+  onLargeTransactions: true,
+  onSavingsOpportunities: true,
+};
 
 /**
  * Creates or updates a user profile in Firestore.
@@ -23,6 +29,7 @@ export async function createUserProfile(userId: string, fullName: string, email:
       email,
       createdAt: serverTimestamp(),
       photoURL: null, // Initialize photoURL
+      notificationPreferences: defaultNotificationPreferences, // Initialize with defaults
     });
     console.log("User profile created/updated for ID: ", userId);
   } catch (e: any) {
@@ -55,6 +62,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
         email: data.email,
         createdAt: data.createdAt as Timestamp,
         photoURL: data.photoURL || null,
+        notificationPreferences: data.notificationPreferences || defaultNotificationPreferences, // Provide default if not set
       } as UserProfile;
     } else {
       console.log(`No profile found for user ${userId}`);

@@ -50,7 +50,7 @@ export const GoalIcons: { name: string; icon: LucideIcon; iconName: string }[] =
   { name: "New Car", icon: Car, iconName: "Car" },
   { name: "Gadget", icon: Smartphone, iconName: "Smartphone" },
   { name: "Education", icon: BookOpen, iconName: "BookOpen" },
-  { name: "Shopping", icon: ShoppingCart, iconName: "ShoppingBag" }, // Corrected from ShoppingBag to ShoppingCart if that's the intent
+  { name: "Shopping", icon: ShoppingCart, iconName: "ShoppingBag" },
   { name: "Savings/Emergency", icon: ShieldCheck, iconName: "ShieldCheck" },
   { name: "Gift", icon: Gift, iconName: "Gift" },
   { name: "Other", icon: Target, iconName: "Target" },
@@ -73,6 +73,12 @@ export interface ChartConfig {
   };
 }
 
+export interface NotificationPreferences {
+  onOverspending: boolean;
+  onLargeTransactions: boolean;
+  onSavingsOpportunities: boolean;
+}
+
 // Represents a user profile as stored in Firestore
 export interface UserProfile {
   id: string; // Corresponds to Firebase Auth UID
@@ -80,12 +86,13 @@ export interface UserProfile {
   email: string;
   createdAt: Timestamp;
   photoURL?: string | null;
+  notificationPreferences?: NotificationPreferences;
 }
 
 // Data for updating a user profile, restricted to allowed fields
 export type UserProfileUpdateData = {
   fullName?: string;
-  // Add other updatable fields here, e.g., notificationPreferences
+  notificationPreferences?: NotificationPreferences;
   // photoURL will be handled separately if we implement direct upload
 };
 
@@ -107,8 +114,7 @@ export interface Account {
   name: string; // e.g., "Primary Savings", "Salary Account"
   type: AccountType;
   iconName: string; // Name of the Lucide icon
-  accountNumberLast4: string; // Last 4 digits of account number - now mandatory
-  // balance?: number; // Optional: Current balance, can be complex to maintain
+  accountNumberLast4: string; 
   createdAt: Timestamp;
 }
 

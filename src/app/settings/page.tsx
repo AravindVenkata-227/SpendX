@@ -12,19 +12,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { ChevronLeft, UserCircle, Bell, Palette, Loader2, Sun, Moon, Laptop, Sparkles } from 'lucide-react';
+import { ChevronLeft, UserCircle, Bell, Palette, Loader2, Sun, Moon, Laptop, Sparkles, MessageSquareQuote } from 'lucide-react';
+import { getUserProfile, updateUserProfile, type UserProfile, type NotificationPreferences } from '@/services/userService';
+import { useToast } from '@/hooks/use-toast';
+
 
 type Theme = "light" | "dark" | "system";
 const INVESTMENT_CARD_VISIBLE_KEY = 'feature_showInvestmentIdeasCard';
+const defaultNotificationPrefs: NotificationPreferences = {
+  onOverspending: true,
+  onLargeTransactions: true,
+  onSavingsOpportunities: true,
+};
+
 
 export default function SettingsPage() {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(defaultNotificationPrefs);
   const router = useRouter();
-
-  // Mock states for preferences
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [pushNotifications, setPushNotifications] = useState(false);
+  const { toast } = useToast();
   
   const [currentTheme, setCurrentTheme] = useState<Theme>("system");
   const [showInvestmentCard, setShowInvestmentCard] = useState(false);
@@ -37,7 +46,6 @@ export default function SettingsPage() {
   const handleInvestmentCardToggle = (checked: boolean) => {
     setShowInvestmentCard(checked);
     localStorage.setItem(INVESTMENT_CARD_VISIBLE_KEY, String(checked));
-    // Dispatch a storage event so other tabs/components can react if needed
     window.dispatchEvent(new StorageEvent('storage', { key: INVESTMENT_CARD_VISIBLE_KEY, newValue: String(checked) }));
   };
 
@@ -61,37 +69,68 @@ export default function SettingsPage() {
     if (savedTheme) {
       applyTheme(savedTheme);
     } else {
-      applyTheme("system"); // Default to system if no theme saved
+      applyTheme("system"); 
     }
   }, [applyTheme]);
 
   useEffect(() => {
     if (currentTheme !== "system") return;
-
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
-      applyTheme("system"); // Re-apply system theme to reflect OS change
+      applyTheme("system"); 
     };
-
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, [currentTheme, applyTheme]);
 
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
+        setIsLoadingProfile(true);
+        try {
+          const profile = await getUserProfile(user.uid);
+          setUserProfile(profile);
+          if (profile?.notificationPreferences) {
+            setNotificationPrefs(profile.notificationPreferences);
+          } else {
+            setNotificationPrefs(defaultNotificationPrefs);
+          }
+        } catch (error) {
+          console.error("Error fetching profile in settings:", error);
+          toast({ title: "Error", description: "Could not load profile settings.", variant: "destructive" });
+          setNotificationPrefs(defaultNotificationPrefs);
+        } finally {
+          setIsLoadingProfile(false);
+        }
       } else {
-        router.push('/login'); // Redirect to login if not authenticated
+        router.push('/login'); 
       }
       setIsLoadingAuth(false);
     });
     return () => unsubscribe();
-  }, [router]);
+  }, [router, toast]);
+
+  const handleNotificationPrefChange = async (prefKey: keyof NotificationPreferences, value: boolean) => {
+    if (!currentUser) return;
+
+    const updatedPrefs = { ...notificationPrefs, [prefKey]: value };
+    setNotificationPrefs(updatedPrefs); // Optimistic update
+
+    try {
+      await updateUserProfile(currentUser.uid, { notificationPreferences: updatedPrefs });
+      toast({ title: "Preferences Updated", description: "Your notification preferences have been saved." });
+    } catch (error: any) {
+      console.error("Error updating notification preferences:", error);
+      toast({ title: "Error", description: error.message || "Could not save preferences.", variant: "destructive" });
+      // Revert optimistic update if save fails (optional, for complex scenarios)
+      // For now, we assume success or let the next fetch correct it.
+    }
+  };
 
 
-  if (isLoadingAuth || !currentUser) {
+  if (isLoadingAuth || !currentUser || isLoadingProfile) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -115,7 +154,6 @@ export default function SettingsPage() {
 
           <Separator />
 
-          {/* Account Settings Card */}
           <Card className="shadow-lg">
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -135,50 +173,62 @@ export default function SettingsPage() {
               </Button>
             </CardContent>
           </Card>
-
-          {/* Notification Preferences Card */}
+          
           <Card className="shadow-lg">
             <CardHeader>
               <div className="flex items-center gap-3">
-                <Bell className="h-6 w-6 text-primary" />
-                <CardTitle className="text-xl">Notifications</CardTitle>
+                <MessageSquareQuote className="h-6 w-6 text-primary" />
+                <CardTitle className="text-xl">Insight & Notification Preferences</CardTitle>
               </div>
-              <CardDescription>Customize how you receive notifications from FinTrack AI.</CardDescription>
+              <CardDescription>Customize the AI insights and notifications you receive.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
-                <Label htmlFor="email-notifications" className="flex flex-col space-y-1">
-                  <span>Email Notifications</span>
+                <Label htmlFor="overspending-alerts" className="flex flex-col space-y-1">
+                  <span>Overspending Alerts</span>
                   <span className="font-normal leading-snug text-muted-foreground">
-                    Receive important updates and summaries via email.
+                    Get notified about significant overspending in categories.
                   </span>
                 </Label>
                 <Switch
-                  id="email-notifications"
-                  checked={emailNotifications}
-                  onCheckedChange={setEmailNotifications}
-                  aria-label="Toggle email notifications"
+                  id="overspending-alerts"
+                  checked={notificationPrefs.onOverspending}
+                  onCheckedChange={(checked) => handleNotificationPrefChange('onOverspending', checked)}
+                  aria-label="Toggle overspending alerts"
                 />
               </div>
               <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
-                <Label htmlFor="push-notifications" className="flex flex-col space-y-1">
-                  <span>Push Notifications</span>
+                <Label htmlFor="large-transaction-alerts" className="flex flex-col space-y-1">
+                  <span>Large Transaction Alerts</span>
                   <span className="font-normal leading-snug text-muted-foreground">
-                    Get real-time alerts on your devices (coming soon).
+                    Receive alerts for unusually large transactions.
                   </span>
                 </Label>
                 <Switch
-                  id="push-notifications"
-                  checked={pushNotifications}
-                  onCheckedChange={setPushNotifications}
-                  disabled // Placeholder for future feature
-                  aria-label="Toggle push notifications"
+                  id="large-transaction-alerts"
+                  checked={notificationPrefs.onLargeTransactions}
+                  onCheckedChange={(checked) => handleNotificationPrefChange('onLargeTransactions', checked)}
+                  aria-label="Toggle large transaction alerts"
+                />
+              </div>
+              <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
+                <Label htmlFor="savings-opportunity-alerts" className="flex flex-col space-y-1">
+                  <span>Savings Opportunity Alerts</span>
+                  <span className="font-normal leading-snug text-muted-foreground">
+                    Get insights on potential savings opportunities.
+                  </span>
+                </Label>
+                <Switch
+                  id="savings-opportunity-alerts"
+                  checked={notificationPrefs.onSavingsOpportunities}
+                  onCheckedChange={(checked) => handleNotificationPrefChange('onSavingsOpportunities', checked)}
+                  aria-label="Toggle savings opportunity alerts"
                 />
               </div>
             </CardContent>
           </Card>
 
-          {/* Appearance Settings Card */}
+
           <Card className="shadow-lg">
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -217,7 +267,6 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Experimental Features Card */}
           <Card className="shadow-lg">
             <CardHeader>
               <div className="flex items-center gap-3">

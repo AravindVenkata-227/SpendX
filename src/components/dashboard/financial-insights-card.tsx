@@ -18,17 +18,36 @@ import { auth } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getTransactionsForMonth, type TransactionFirestore } from '@/services/transactionService';
+import { getUserProfile, type UserProfile, type NotificationPreferences } from '@/services/userService';
+
+const defaultNotificationPrefs: NotificationPreferences = {
+  onOverspending: true,
+  onLargeTransactions: true,
+  onSavingsOpportunities: true,
+};
 
 export default function FinancialInsightsCard() {
   const [insightResult, setInsightResult] = useState<SpendingInsightOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+      if (user) {
+        try {
+          const profile = await getUserProfile(user.uid);
+          setUserProfile(profile);
+        } catch (error) {
+          console.error("Error fetching profile for insights card:", error);
+          setUserProfile(null); // Ensure profile is null on error
+        }
+      } else {
+        setUserProfile(null);
+      }
       setIsLoadingAuth(false);
     });
     return () => unsubscribe();
@@ -38,10 +57,8 @@ export default function FinancialInsightsCard() {
     if (transactions.length === 0) {
       return "No spending data available for the current month.";
     }
-
     const categoryTotals: Record<string, number> = {};
     let totalSpending = 0;
-
     transactions.forEach(t => {
       if (t.type === 'debit') {
         const amount = Math.abs(t.amount);
@@ -49,23 +66,28 @@ export default function FinancialInsightsCard() {
         totalSpending += amount;
       }
     });
-
     let summary = `Summary of spending for the current month (Total: ₹${totalSpending.toLocaleString()}):\n`;
     for (const [category, amount] of Object.entries(categoryTotals)) {
       summary += `- Spent ₹${amount.toLocaleString()} in ${category}.\n`;
     }
-
-    if (Object.keys(categoryTotals).length === 0 && totalSpending === 0) {
+     if (Object.keys(categoryTotals).length === 0 && totalSpending === 0) {
         summary = "No debit transactions (spending) recorded for the current month.";
-    } else if (Object.keys(categoryTotals).length === 0 && totalSpending > 0) {
-        // This case should ideally not happen if totalSpending is sum of debits.
-        // It might occur if there are only credit transactions with positive amounts,
-        // but our AI prompt is about spending.
-        summary = "No spending (debit transactions) in specific categories found this month, though overall balance might have changed.";
     }
-
     return summary;
   };
+
+  const formatUserPreferencesForAI = (prefs: NotificationPreferences | undefined | null): string => {
+    if (!prefs) {
+      return "User notification preferences not available or not set. Using default considerations.";
+    }
+    let prefString = "User preferences for notifications:\n";
+    prefString += `- Overspending alerts: ${prefs.onOverspending ? 'Enabled' : 'Disabled'}\n`;
+    prefString += `- Large transaction alerts: ${prefs.onLargeTransactions ? 'Enabled' : 'Disabled'}\n`;
+    prefString += `- Savings opportunity alerts: ${prefs.onSavingsOpportunities ? 'Enabled' : 'Disabled'}\n`;
+    prefString += "Consider these preferences when deciding to send a notification.";
+    return prefString;
+  };
+
 
   const handleGetInsight = async () => {
     if (!currentUser) {
@@ -79,20 +101,32 @@ export default function FinancialInsightsCard() {
 
     setIsLoading(true);
     setInsightResult(null);
-
-    const mockUserPreferences = "Notify me about significant increases in category spending, unusual large transactions, and when I'm close to exceeding a budget. I don't want notifications for every small transaction.";
+    
+    // Fetch fresh profile data, in case preferences changed in another tab/window
+    let currentPrefs = defaultNotificationPrefs;
+    try {
+        const freshProfile = await getUserProfile(currentUser.uid);
+        if (freshProfile?.notificationPreferences) {
+            currentPrefs = freshProfile.notificationPreferences;
+        }
+    } catch (profileError) {
+        console.error("Could not fetch latest profile for insight generation:", profileError);
+        // Proceed with defaults or cached profile prefs if available
+        currentPrefs = userProfile?.notificationPreferences || defaultNotificationPrefs;
+    }
+    
+    const userPreferencesString = formatUserPreferencesForAI(currentPrefs);
 
     try {
       const now = new Date();
       const year = now.getFullYear();
-      const month = now.getMonth() + 1; // JavaScript months are 0-indexed
-
+      const month = now.getMonth() + 1; 
       const transactions = await getTransactionsForMonth(currentUser.uid, year, month);
       const spendingDataString = formatTransactionsForAI(transactions);
 
       const result = await generateSpendingInsight({
         spendingData: spendingDataString,
-        userPreferences: mockUserPreferences,
+        userPreferences: userPreferencesString,
       });
       setInsightResult(result);
 
@@ -101,6 +135,7 @@ export default function FinancialInsightsCard() {
           title: 'New Financial Insight!',
           description: result.insight,
           variant: 'default',
+          duration: 7000, // Longer duration for important insights
         });
       }
     } catch (error: any) {
@@ -142,10 +177,10 @@ export default function FinancialInsightsCard() {
           <CardTitle>AI Financial Insights</CardTitle>
         </div>
         <CardDescription>
-          Get personalized insights based on your spending habits for the current month.
+          Get personalized insights based on your spending habits for the current month and your notification preferences.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 min-h-[100px]">
         {isLoading && (
           <div className="flex items-center justify-center text-muted-foreground">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -157,7 +192,7 @@ export default function FinancialInsightsCard() {
             <p className="text-sm font-semibold">Latest Insight:</p>
             <p className="text-sm text-foreground">{insightResult.insight}</p>
             {insightResult.sendNotification && (
-                <p className="text-xs text-accent mt-2">A notification for this insight was triggered.</p>
+                <p className="text-xs text-accent mt-2">A notification for this insight was triggered based on your preferences.</p>
             )}
           </div>
         )}

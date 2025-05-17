@@ -1,7 +1,7 @@
 
 import type { LucideIcon } from 'lucide-react';
 import type { Timestamp } from 'firebase/firestore';
-import { Plane, Home, Car, Smartphone, BookOpen, ShoppingBag, ShieldCheck, Gift, Target } from 'lucide-react';
+import { Plane, Home, Car, Smartphone, BookOpen, ShoppingCart, ShieldCheck, Gift, Target } from 'lucide-react';
 
 // Represents a transaction as stored in Firestore
 export interface TransactionFirestore {
@@ -50,7 +50,7 @@ export const GoalIcons: { name: string; icon: LucideIcon; iconName: string }[] =
   { name: "New Car", icon: Car, iconName: "Car" },
   { name: "Gadget", icon: Smartphone, iconName: "Smartphone" },
   { name: "Education", icon: BookOpen, iconName: "BookOpen" },
-  { name: "Shopping", icon: ShoppingBag, iconName: "ShoppingBag" },
+  { name: "Shopping", icon: ShoppingCart, iconName: "ShoppingBag" }, // Corrected from ShoppingBag to ShoppingCart if that's the intent
   { name: "Savings/Emergency", icon: ShieldCheck, iconName: "ShieldCheck" },
   { name: "Gift", icon: Gift, iconName: "Gift" },
   { name: "Other", icon: Target, iconName: "Target" },
@@ -107,6 +107,7 @@ export interface Account {
   name: string; // e.g., "Primary Savings", "Salary Account"
   type: AccountType;
   iconName: string; // Name of the Lucide icon
+  accountNumberLast4?: string; // Optional: Last 4 digits of account number
   // balance?: number; // Optional: Current balance, can be complex to maintain
   createdAt: Timestamp;
 }
@@ -114,6 +115,7 @@ export interface Account {
 // Account type for UI display (includes actual icon component)
 export interface UIAccount extends Omit<Account, 'iconName' | 'createdAt'> {
   icon: LucideIcon;
+  accountNumberLast4?: string;
 }
 
 // Data for updating an account, excluding non-updatable fields

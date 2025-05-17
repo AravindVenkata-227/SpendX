@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { updateAccount } from '@/services/accountService';
 import type { User } from 'firebase/auth';
 import { AccountTypes, type AccountType, type UIAccount, type AccountUpdateData } from '@/types';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Trash2, Hash } from 'lucide-react';
 
 const accountTypeToIconMap: Record<AccountType, string> = {
   "Savings": "PiggyBank",
@@ -36,6 +36,11 @@ const accountTypeToIconMap: Record<AccountType, string> = {
 const formSchema = z.object({
   name: z.string().min(2, { message: "Account name must be at least 2 characters." }).max(50),
   type: z.enum(AccountTypes, { required_error: "Please select an account type." }),
+  accountNumberLast4: z.string()
+    .length(4, { message: "Must be 4 digits if provided." })
+    .regex(/^\d{4}$/, { message: "Must be 4 digits if provided." })
+    .optional()
+    .or(z.literal('')), // Allows empty string
 });
 
 interface EditAccountDialogProps {
@@ -44,7 +49,7 @@ interface EditAccountDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAccountUpdated: () => void;
-  onInitiateDelete: () => void; // New prop to handle delete initiation
+  onInitiateDelete: () => void; 
 }
 
 export default function EditAccountDialog({ currentUser, accountToEdit, open, onOpenChange, onAccountUpdated, onInitiateDelete }: EditAccountDialogProps) {
@@ -56,6 +61,7 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
     defaultValues: {
       name: '',
       type: undefined,
+      accountNumberLast4: '',
     },
   });
 
@@ -64,6 +70,7 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
       form.reset({
         name: accountToEdit.name,
         type: accountToEdit.type,
+        accountNumberLast4: accountToEdit.accountNumberLast4 || '',
       });
     }
   }, [accountToEdit, open, form]);
@@ -80,6 +87,7 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
         name: values.name,
         type: values.type as AccountType,
         iconName: iconName,
+        accountNumberLast4: values.accountNumberLast4 || null, // Send null if empty to potentially clear it
       };
       await updateAccount(accountToEdit.id, currentUser.uid, updateData);
       toast({ title: "Success", description: "Account updated successfully." });
@@ -123,14 +131,14 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
               className="mt-1"
             />
             {form.formState.errors.name && (
-              <p className="text-xs text-red-500 mt-1">{form.formState.errors.name.message}</p>
+              <p className="text-xs text-destructive mt-1">{form.formState.errors.name.message}</p>
             )}
           </div>
           <div>
             <Label htmlFor="type-edit">Account Type</Label>
             <Select
               onValueChange={(value) => form.setValue('type', value as AccountType)}
-              value={form.watch('type')} // Controlled component
+              value={form.watch('type')} 
               disabled={isLoading}
             >
               <SelectTrigger id="type-edit" className="mt-1">
@@ -145,21 +153,38 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
               </SelectContent>
             </Select>
             {form.formState.errors.type && (
-              <p className="text-xs text-red-500 mt-1">{form.formState.errors.type.message}</p>
+              <p className="text-xs text-destructive mt-1">{form.formState.errors.type.message}</p>
             )}
           </div>
-          <DialogFooter className="justify-between sm:justify-between"> {/* Modified for spacing */}
+           <div>
+            <Label htmlFor="accountNumberLast4-edit">Account Number (Last 4 Digits - Optional)</Label>
+            <div className="relative mt-1">
+                <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="accountNumberLast4-edit"
+                  placeholder="1234"
+                  {...form.register('accountNumberLast4')}
+                  disabled={isLoading}
+                  className="pl-10"
+                  maxLength={4}
+                />
+            </div>
+            {form.formState.errors.accountNumberLast4 && (
+              <p className="text-xs text-destructive mt-1">{form.formState.errors.accountNumberLast4.message}</p>
+            )}
+          </div>
+          <DialogFooter className="justify-between sm:justify-between"> 
             <Button 
               type="button" 
               variant="destructive" 
               onClick={handleDeleteClick} 
               disabled={isLoading}
-              className="sm:mr-auto" // Pushes delete button to the left on sm screens and up
+              className="sm:mr-auto" 
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete Account
             </Button>
-            <div className="flex gap-2 mt-2 sm:mt-0"> {/* Group cancel and save */}
+            <div className="flex gap-2 mt-2 sm:mt-0"> 
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isLoading}>
                   Cancel

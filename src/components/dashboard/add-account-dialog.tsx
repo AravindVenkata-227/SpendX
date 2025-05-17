@@ -23,7 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { addAccount } from '@/services/accountService';
 import type { User } from 'firebase/auth';
 import { AccountTypes, type AccountType } from '@/types';
-import { Loader2, PlusCircle, PiggyBank, Landmark, CreditCard, Briefcase, TrendingUp, ShieldQuestion } from 'lucide-react';
+import { Loader2, PlusCircle, PiggyBank, Landmark, CreditCard, Briefcase, TrendingUp, ShieldQuestion, Hash } from 'lucide-react';
 
 const accountTypeToIconMap: Record<AccountType, string> = {
   "Savings": "PiggyBank",
@@ -37,6 +37,11 @@ const accountTypeToIconMap: Record<AccountType, string> = {
 const formSchema = z.object({
   name: z.string().min(2, { message: "Account name must be at least 2 characters." }).max(50),
   type: z.enum(AccountTypes, { required_error: "Please select an account type." }),
+  accountNumberLast4: z.string()
+    .length(4, { message: "Must be 4 digits if provided." })
+    .regex(/^\d{4}$/, { message: "Must be 4 digits if provided." })
+    .optional()
+    .or(z.literal('')), // Allows empty string
 });
 
 interface AddAccountDialogProps {
@@ -54,6 +59,7 @@ export default function AddAccountDialog({ currentUser, onAccountAdded }: AddAcc
     defaultValues: {
       name: '',
       type: undefined,
+      accountNumberLast4: '',
     },
   });
 
@@ -65,16 +71,21 @@ export default function AddAccountDialog({ currentUser, onAccountAdded }: AddAcc
     setIsLoading(true);
     try {
       const iconName = accountTypeToIconMap[values.type as AccountType];
-      await addAccount({
+      const accountData: any = {
         userId: currentUser.uid,
         name: values.name,
         type: values.type as AccountType,
         iconName: iconName,
-      });
+      };
+      if (values.accountNumberLast4 && values.accountNumberLast4.trim() !== '') {
+        accountData.accountNumberLast4 = values.accountNumberLast4;
+      }
+
+      await addAccount(accountData);
       toast({ title: "Success", description: "Account added successfully." });
-      onAccountAdded(); // Refresh the accounts list in the parent
-      setOpen(false); // Close dialog on success
-      form.reset(); // Reset form for next time
+      onAccountAdded(); 
+      setOpen(false); 
+      form.reset(); 
     } catch (error: any) {
       console.error("Error adding account:", error);
       toast({ title: "Error", description: error.message || "Could not add account.", variant: "destructive" });
@@ -108,7 +119,7 @@ export default function AddAccountDialog({ currentUser, onAccountAdded }: AddAcc
               className="mt-1"
             />
             {form.formState.errors.name && (
-              <p className="text-xs text-red-500 mt-1">{form.formState.errors.name.message}</p>
+              <p className="text-xs text-destructive mt-1">{form.formState.errors.name.message}</p>
             )}
           </div>
           <div>
@@ -130,7 +141,24 @@ export default function AddAccountDialog({ currentUser, onAccountAdded }: AddAcc
               </SelectContent>
             </Select>
             {form.formState.errors.type && (
-              <p className="text-xs text-red-500 mt-1">{form.formState.errors.type.message}</p>
+              <p className="text-xs text-destructive mt-1">{form.formState.errors.type.message}</p>
+            )}
+          </div>
+          <div>
+            <Label htmlFor="accountNumberLast4">Account Number (Last 4 Digits - Optional)</Label>
+             <div className="relative mt-1">
+                <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="accountNumberLast4"
+                  placeholder="1234"
+                  {...form.register('accountNumberLast4')}
+                  disabled={isLoading}
+                  className="pl-10"
+                  maxLength={4}
+                />
+            </div>
+            {form.formState.errors.accountNumberLast4 && (
+              <p className="text-xs text-destructive mt-1">{form.formState.errors.accountNumberLast4.message}</p>
             )}
           </div>
           <DialogFooter>

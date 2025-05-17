@@ -18,11 +18,22 @@ export async function addAccount(accountData: Omit<Account, 'id' | 'createdAt'>)
     throw new Error("Account name, type, and icon name are required.");
   }
 
+  const dataToSave: any = {
+    ...accountData,
+    createdAt: serverTimestamp(),
+  };
+
+  // Only include accountNumberLast4 if it's provided and not an empty string
+  if (accountData.accountNumberLast4 && accountData.accountNumberLast4.trim() !== '') {
+    dataToSave.accountNumberLast4 = accountData.accountNumberLast4;
+  } else {
+    // Ensure it's not saved if empty, or handle as null if preferred for querying
+    delete dataToSave.accountNumberLast4; 
+  }
+
+
   try {
-    const docRef = await addDoc(collection(db, 'accounts'), {
-      ...accountData,
-      createdAt: serverTimestamp(),
-    });
+    const docRef = await addDoc(collection(db, 'accounts'), dataToSave);
     console.log("Account added with ID: ", docRef.id);
     return docRef.id;
   } catch (e: any) {
@@ -58,6 +69,7 @@ export async function getAccountsByUserId(userId: string): Promise<Account[]> {
         name: data.name,
         type: data.type as AccountType,
         iconName: data.iconName,
+        accountNumberLast4: data.accountNumberLast4 || undefined,
         createdAt: data.createdAt as Timestamp,
       } as Account); // Ensure correct casting
     });
@@ -93,9 +105,20 @@ export async function updateAccount(accountId: string, userId: string, updateDat
     throw new Error("Account ID is required to update an account.");
   }
   const accountRef = doc(db, 'accounts', accountId);
+  
+  const dataToUpdate: any = { ...updateData };
+  // If accountNumberLast4 is explicitly set to an empty string, remove it or set to a specific value
+  // to signify it's not present (e.g., if Firestore handles empty strings as not present)
+  if (updateData.accountNumberLast4 === '') {
+    dataToUpdate.accountNumberLast4 = null; // Or use delete if you prefer not to store nulls
+  } else if (updateData.accountNumberLast4) {
+    dataToUpdate.accountNumberLast4 = updateData.accountNumberLast4;
+  }
+  // if accountNumberLast4 is undefined in updateData, it won't be touched
+
   try {
     // Firestore rules should handle ownership verification (userId must match doc's userId)
-    await updateDoc(accountRef, updateData);
+    await updateDoc(accountRef, dataToUpdate);
     console.log("Account updated with ID: ", accountId);
   } catch (e: any) {
     console.error("Error updating account: ", e);

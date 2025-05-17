@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UITransactionType, TransactionFirestore, Account as FirestoreAccount, UIAccount, AccountType } from "@/types";
 import { getTransactionsByAccountId, deleteTransaction } from '@/services/transactionService';
-import { getAccountsByUserId, deleteAccount as deleteAccountService } from '@/services/accountService'; // Added deleteAccount
+import { getAccountsByUserId, deleteAccount as deleteAccountService } from '@/services/accountService'; 
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import AddAccountDialog from './add-account-dialog';
@@ -109,6 +109,7 @@ const mapFirestoreAccountToUIAccount = (account: FirestoreAccount): UIAccount =>
     name: account.name,
     type: account.type,
     icon: IconComponent,
+    accountNumberLast4: account.accountNumberLast4,
   };
 };
 
@@ -170,17 +171,23 @@ export default function RecentTransactionsTableCard() {
       const firestoreAccounts = await getAccountsByUserId(userId);
       const uiAccounts = firestoreAccounts.map(mapFirestoreAccountToUIAccount);
       setAccounts(uiAccounts);
-      if (uiAccounts.length > 0 && !selectedAccountId) {
-        setSelectedAccountId(uiAccounts[0].id);
+      if (uiAccounts.length > 0 && !selectedAccountId) { 
+        const currentSelectedExists = uiAccounts.some(acc => acc.id === selectedAccountId);
+        if(!currentSelectedExists) {
+          setSelectedAccountId(uiAccounts[0].id);
+        }
       } else if (uiAccounts.length === 0) {
         setSelectedAccountId(undefined);
+        setTransactions([]); // Clear transactions if no accounts
+        setFormattedDates({});
       }
+      return uiAccounts; // Return fetched accounts
     } catch (error: any) {
       console.error("Failed to fetch accounts:", error);
       let toastMessage = error.message || "Could not fetch your accounts.";
-      if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission denied'))) {
+      if (error.message && error.message.toLowerCase().includes('permission denied')) {
         toastMessage = "Permission denied fetching accounts. Ensure Firestore rules are deployed and allow access, and that account documents have the correct 'userId' matching the authenticated user.";
-      } else if (error.code === 'failed-precondition' || (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions')))) {
+      } else if (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions'))) {
          toastMessage = "Missing or insufficient Firestore index for fetching accounts. Check Firestore logs for details and a link to create it.";
       }
       toast({
@@ -190,10 +197,13 @@ export default function RecentTransactionsTableCard() {
       });
       setAccounts([]);
       setSelectedAccountId(undefined);
+      setTransactions([]); // Clear transactions on error
+      setFormattedDates({});
+      return []; // Return empty array on error
     } finally {
       setIsLoadingAccounts(false);
     }
-  }, [toast, selectedAccountId]);
+  }, [toast, selectedAccountId]); 
 
   useEffect(() => {
     if (currentUser) {
@@ -202,6 +212,8 @@ export default function RecentTransactionsTableCard() {
       setIsLoadingAccounts(false);
       setAccounts([]);
       setSelectedAccountId(undefined);
+      setTransactions([]);
+      setFormattedDates({});
     }
   }, [currentUser, fetchAccounts]);
 
@@ -236,7 +248,9 @@ export default function RecentTransactionsTableCard() {
       });
       setFormattedDates(newFormattedDates);
       
-      const selectedAccountName = accounts.find(acc => acc.id === accountId)?.name || 'Selected Account';
+      const selectedAccount = accounts.find(acc => acc.id === accountId);
+      const selectedAccountName = selectedAccount ? selectedAccount.name : 'Selected Account';
+      
       if (uiTransactions.length === 0 && accounts.length > 0) {
          toast({
           title: "No Transactions",
@@ -248,9 +262,9 @@ export default function RecentTransactionsTableCard() {
     } catch (error: any) {
       console.error("Failed to fetch transactions:", error);
        let toastMessage = error.message || "Could not fetch transactions for the selected account.";
-        if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission denied'))) {
+        if (error.message && error.message.toLowerCase().includes('permission denied')) {
             toastMessage = "Permission denied fetching transactions. Check Firestore rules and ensure data has correct userId.";
-        } else if (error.code === 'failed-precondition' || (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions')))) {
+        } else if (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions'))) {
             toastMessage = "Missing or insufficient Firestore index for fetching transactions. Check Firestore logs for details and a link to create it.";
         }
       toast({
@@ -268,32 +282,40 @@ export default function RecentTransactionsTableCard() {
   useEffect(() => {
     if (currentUser && selectedAccountId) {
         fetchTransactions(selectedAccountId, currentUser.uid);
-    } else {
+    } else if (!selectedAccountId && accounts.length === 0) { // Handles case where accounts are empty initially
         setTransactions([]);
         setFormattedDates({});
     }
-  }, [selectedAccountId, currentUser, fetchTransactions]);
+  }, [selectedAccountId, currentUser, fetchTransactions, accounts.length]);
 
   const handleAccountChange = (accountId: string) => {
     setSelectedAccountId(accountId);
   };
 
-  const refreshData = (isAccountChange: boolean = false) => {
+  const refreshData = (isAccountChange: boolean = false, newSelectedAccountId?: string) => {
     if (currentUser) {
-      fetchAccounts(currentUser.uid).then(() => {
-        if (!isAccountChange && selectedAccountId) {
-           fetchTransactions(selectedAccountId, currentUser.uid);
-        } else if (isAccountChange) {
-            const currentAccounts = accounts; // Use the state variable 'accounts' which will be updated by fetchAccounts
-            if (currentAccounts.length > 0 && !currentAccounts.find(a => a.id === selectedAccountId)) {
-                setSelectedAccountId(currentAccounts[0].id);
-            } else if (currentAccounts.length === 0) {
-                setSelectedAccountId(undefined);
-                setTransactions([]); // Clear transactions if no accounts left
-            } else if (selectedAccountId) {
-                 // If selected account still exists, re-fetch its transactions
-                fetchTransactions(selectedAccountId, currentUser.uid);
-            }
+      fetchAccounts(currentUser.uid).then((fetchedAccs) => { 
+        const currentFetchedAccounts = fetchedAccs || accounts; // Use newly fetched or existing
+        
+        let idToSelect = selectedAccountId;
+
+        if (isAccountChange) {
+          if (newSelectedAccountId && currentFetchedAccounts.find(a => a.id === newSelectedAccountId)) {
+            idToSelect = newSelectedAccountId; 
+          } else if (currentFetchedAccounts.length > 0 && !currentFetchedAccounts.find(a => a.id === selectedAccountId)) {
+            idToSelect = currentFetchedAccounts[0].id; 
+          } else if (currentFetchedAccounts.length === 0) {
+            idToSelect = undefined;
+          }
+        }
+        
+        setSelectedAccountId(idToSelect); // Update selected account ID state
+
+        if (idToSelect) { // Fetch transactions if an ID is selected
+          fetchTransactions(idToSelect, currentUser.uid);
+        } else {
+          setTransactions([]); // Clear transactions if no account is selected
+          setFormattedDates({});
         }
       });
     }
@@ -337,12 +359,23 @@ export default function RecentTransactionsTableCard() {
       toast({ title: "Error", description: "User or account ID missing for deletion.", variant: "destructive" });
       return;
     }
+    const accountToDeleteId = deletingAccountId; // Store before state is cleared
     try {
-      await deleteAccountService(deletingAccountId, currentUser.uid);
+      await deleteAccountService(accountToDeleteId, currentUser.uid);
       toast({ title: "Success", description: "Account deleted successfully." });
-      // Reset selected account and refresh, which will pick the first available or none
-      setSelectedAccountId(undefined); 
-      refreshData(true); 
+      
+      // Determine the next account to select
+      const remainingAccounts = accounts.filter(acc => acc.id !== accountToDeleteId);
+      let nextSelectedId: string | undefined = undefined;
+      if (remainingAccounts.length > 0) {
+        if (selectedAccountId === accountToDeleteId) { // If the deleted account was selected
+          nextSelectedId = remainingAccounts[0].id; // Select the first of the remaining
+        } else {
+          nextSelectedId = selectedAccountId; // Keep current selection if it wasn't the one deleted
+        }
+      }
+      refreshData(true, nextSelectedId);
+
     } catch (error: any) {
       console.error("Error deleting account:", error);
       toast({ title: "Error Deleting Account", description: error.message || "Could not delete account.", variant: "destructive" });
@@ -354,9 +387,9 @@ export default function RecentTransactionsTableCard() {
 
   const handleInitiateDeleteFromEditDialog = () => {
     if (editingAccount) {
-      setIsEditAccountDialogOpen(false); // Close edit dialog
-      setDeletingAccountId(editingAccount.id); // Set ID for delete confirmation
-      setIsDeleteAccountDialogOpen(true); // Open delete confirmation dialog
+      setIsEditAccountDialogOpen(false); 
+      setDeletingAccountId(editingAccount.id); 
+      setIsDeleteAccountDialogOpen(true); 
     }
   };
 
@@ -398,7 +431,6 @@ export default function RecentTransactionsTableCard() {
                   <Edit3 className="h-4 w-4" />
                   <span className="sr-only">Edit Account</span>
                 </Button>
-                {/* Standalone Delete Account button removed from here */}
               </div>
             )}
              <AddAccountDialog currentUser={currentUser} onAccountAdded={() => refreshData(true)} />
@@ -407,7 +439,7 @@ export default function RecentTransactionsTableCard() {
         <CardDescription className="mt-2">
           {!currentUser ? "Please log in to view your transactions." : 
            accounts.length === 0 && !isLoadingAccounts ? "Add an account to start tracking transactions." :
-           `Your latest financial activities for the selected account.`}
+           `Your latest financial activities for ${accounts.find(acc => acc.id === selectedAccountId)?.name || 'the selected account'}.`}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -420,7 +452,7 @@ export default function RecentTransactionsTableCard() {
            <div className="flex items-center justify-center h-[300px]">
              <p className="text-muted-foreground">Login to see your transactions.</p>
            </div>
-        ) : !selectedAccountId && accounts.length > 0 ? (
+        ) : !selectedAccountId && accounts.length > 0 && !isLoadingAccounts ? ( 
             <div className="flex items-center justify-center h-[300px]">
              <p className="text-muted-foreground">Please select an account to view transactions.</p>
            </div>
@@ -442,7 +474,7 @@ export default function RecentTransactionsTableCard() {
                 {transactions.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
-                      {accounts.length === 0 && !isLoadingAccounts ? "No accounts available." :
+                      {accounts.length === 0 && !isLoadingAccounts ? "No accounts available. Please add one." :
                        !selectedAccountId && !isLoadingAccounts ? "Select an account to see transactions." :
                        "No transactions found for this account."}
                     </TableCell>
@@ -500,7 +532,7 @@ export default function RecentTransactionsTableCard() {
                         currentUser={currentUser} 
                         selectedAccountId={selectedAccountId} 
                         allAccounts={accounts}
-                        onTransactionAdded={refreshData}
+                        onTransactionAdded={() => refreshData()}
                     />
                 </div>
             )}
@@ -559,11 +591,11 @@ export default function RecentTransactionsTableCard() {
             if (!open) setEditingAccount(null);
           }}
           onAccountUpdated={() => {
-            refreshData(true); 
+            refreshData(true, editingAccount?.id); 
             setIsEditAccountDialogOpen(false);
             setEditingAccount(null);
           }}
-          onInitiateDelete={handleInitiateDeleteFromEditDialog} // Pass the new handler
+          onInitiateDelete={handleInitiateDeleteFromEditDialog} 
         />
       )}
 
@@ -572,7 +604,7 @@ export default function RecentTransactionsTableCard() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Account?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete this account. All associated transactions will remain but will no longer be linked to this account.
+              This action cannot be undone. This will permanently delete this account and all its associated transactions.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -586,3 +618,4 @@ export default function RecentTransactionsTableCard() {
     </>
   );
 }
+

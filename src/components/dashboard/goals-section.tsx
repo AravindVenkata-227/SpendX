@@ -5,13 +5,13 @@ import { useState, useEffect, useCallback } from 'react';
 import GoalProgressItemCard, { AddGoalCard } from "@/components/dashboard/goal-progress-item-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { UIGoal, Goal as FirestoreGoal } from "@/types";
-import { getGoalsByUserId } from '@/services/goalService'; // Assuming you create this
+import { getGoalsByUserId } from '@/services/goalService';
 import { auth } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Plane, Smartphone, ShieldAlert, Target, Home, BookOpen, Car, Loader2, ShoppingBag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Button } from '../ui/button'; // For a potential "Add Sample Goal" button
+// import { addGoal } from '@/services/goalService'; // For testing, normally remove
 
 // Mapping for icon names to Lucide components
 const goalIcons: { [key: string]: React.ElementType } = {
@@ -34,6 +34,7 @@ const mapFirestoreGoalToUIGoal = (firestoreGoal: FirestoreGoal): UIGoal => {
     targetAmount: firestoreGoal.targetAmount,
     savedAmount: firestoreGoal.savedAmount,
     icon: IconComponent,
+    createdAt: firestoreGoal.createdAt, // Keep createdAt if needed for display or sorting on UI
   };
 };
 
@@ -48,7 +49,7 @@ export default function GoalsSection() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (!user) {
-        setGoals([]);
+        setGoals([]); // Clear goals if user logs out
         setIsLoading(false);
       }
     });
@@ -61,7 +62,7 @@ export default function GoalsSection() {
       const firestoreGoals = await getGoalsByUserId(userId);
       const uiGoals = firestoreGoals.map(mapFirestoreGoalToUIGoal);
       setGoals(uiGoals);
-      if (firestoreGoals.length === 0) {
+      if (firestoreGoals.length === 0 && !isLoading) { // Check isLoading to avoid premature toast
         toast({
           title: "No Savings Goals",
           description: "You haven't set any savings goals yet. Click 'Add New Goal' to start!",
@@ -69,29 +70,27 @@ export default function GoalsSection() {
         });
       }
     } catch (error) {
-      console.error("Failed to fetch goals:", error);
+      console.error("Failed to fetch goals in component:", error);
       toast({
         title: "Error Loading Goals",
-        description: "Could not fetch your savings goals. Please try again later.",
+        description: "Could not fetch your savings goals. Please check server logs for specific Firebase errors (e.g., permissions or missing indexes).",
         variant: "destructive",
       });
       setGoals([]);
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, isLoading]); // Added isLoading to dependency array
 
   useEffect(() => {
     if (currentUser) {
       fetchGoals(currentUser.uid);
     } else {
-      // Clear goals if user logs out
       setGoals([]);
       setIsLoading(false);
     }
   }, [currentUser, fetchGoals]);
   
-  // Placeholder for adding a new goal - to be implemented with a dialog/form
   const handleAddGoal = () => {
     toast({
         title: "Feature Coming Soon!",
@@ -99,13 +98,21 @@ export default function GoalsSection() {
     });
     // Example: Manually add a goal to Firestore for testing (remove in production)
     // if (currentUser) {
-    //   addGoal({ 
-    //     userId: currentUser.uid, 
-    //     name: 'Test Goal from UI', 
-    //     targetAmount: 1000, 
-    //     savedAmount: 100, 
-    //     iconName: 'Car' 
-    //   }).then(() => fetchGoals(currentUser.uid));
+    //   addGoal({
+    //     userId: currentUser.uid,
+    //     name: 'New Travel Fund',
+    //     targetAmount: 25000,
+    //     savedAmount: 1500,
+    //     iconName: 'Plane',
+    //     // createdAt will be set by serverTimestamp in addGoal service
+    //   } as Omit<FirestoreGoal, 'id' | 'createdAt'>) // Type assertion needed here
+    //   .then(() => {
+    //       toast({ title: "Sample Goal Added", description: "Refreshing list..."});
+    //       fetchGoals(currentUser.uid);
+    //   })
+    //   .catch(err => {
+    //       toast({ title: "Error Adding Sample Goal", description: err.message, variant: "destructive"});
+    //   });
     // }
   };
 
@@ -119,13 +126,13 @@ export default function GoalsSection() {
         </div>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
+        {isLoading && !goals.length ? ( // Show loader only if truly loading and no goals yet
           <div className="flex items-center justify-center h-[200px]">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="ml-2">Loading goals...</p>
           </div>
         ) : !currentUser ? (
-           <div className="flex items-center justify-center h-[200px]">
+           <div className="flex flex-col items-center justify-center h-[200px]">
              <p className="text-muted-foreground">Login to see your savings goals.</p>
            </div>
         ) : (
@@ -137,7 +144,7 @@ export default function GoalsSection() {
             ) : (
                 !isLoading && <p className="text-center text-muted-foreground py-4">No goals set yet. Click below to add one!</p>
             )}
-            <div onClick={handleAddGoal}> {/* Make AddGoalCard clickable */}
+            <div onClick={handleAddGoal} className="cursor-pointer">
                 <AddGoalCard />
             </div>
           </div>

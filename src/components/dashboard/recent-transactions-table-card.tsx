@@ -2,14 +2,15 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import type { Transaction as UITransactionType, TransactionFirestore, Account as FirestoreAccount, UIAccount, AccountType } from "@/types";
-import { getTransactionsByAccountId, deleteTransaction } from '@/services/transactionService'; // Added deleteTransaction
-import { getAccountsByUserId } from '@/services/accountService';
+import type { UITransactionType, TransactionFirestore, Account as FirestoreAccount, UIAccount, AccountType } from "@/types";
+import { getTransactionsByAccountId, deleteTransaction } from '@/services/transactionService';
+import { getAccountsByUserId, deleteAccount as deleteAccountService } from '@/services/accountService'; // Added deleteAccount
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import AddAccountDialog from './add-account-dialog';
+import EditAccountDialog from './edit-account-dialog'; // Import EditAccountDialog
 import AddTransactionDialog from './add-transaction-dialog';
-import EditTransactionDialog from './edit-transaction-dialog'; // Import EditTransactionDialog
+import EditTransactionDialog from './edit-transaction-dialog'; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,7 +20,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"; // Import AlertDialog components
+} from "@/components/ui/alert-dialog";
 
 
 import {
@@ -38,7 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button"; // Import Button
+import { Button } from "@/components/ui/button"; 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -64,9 +65,9 @@ import {
   ShieldQuestion,
   HeartPulse,
   Gift,
-  Banknote,
-  Pencil, // Added Pencil
-  Trash2, // Added Trash2
+  Pencil, 
+  Trash2, 
+  Edit3, // Using Edit3 for account edit for slight visual difference
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseISO, isValid } from 'date-fns';
@@ -116,10 +117,10 @@ const mapFirestoreTransactionToUI = (transaction: TransactionFirestore): UITrans
   return {
     id: transaction.id!,
     accountId: transaction.accountId,
-    date: transaction.date, // Stored as 'YYYY-MM-DD' string
+    date: transaction.date, 
     description: transaction.description,
     category: transaction.category,
-    amount: transaction.amount, // Stored as number (positive for credit, negative for debit)
+    amount: transaction.amount, 
     type: transaction.type,
     icon: IconComponent,
   };
@@ -136,9 +137,14 @@ export default function RecentTransactionsTableCard() {
   const [formattedDates, setFormattedDates] = useState<Record<string, string>>({});
 
   const [editingTransaction, setEditingTransaction] = useState<UITransactionType | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
   const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleteTransactionDialogOpen, setIsDeleteTransactionDialogOpen] = useState(false);
+
+  const [editingAccount, setEditingAccount] = useState<UIAccount | null>(null);
+  const [isEditAccountDialogOpen, setIsEditAccountDialogOpen] = useState(false);
+  const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
+  const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
 
 
   useEffect(() => {
@@ -149,6 +155,8 @@ export default function RecentTransactionsTableCard() {
         setTransactions([]);
         setFormattedDates({});
         setSelectedAccountId(undefined);
+        setEditingAccount(null);
+        setDeletingAccountId(null);
         setIsLoadingAccounts(false);
         setIsLoadingTransactions(false);
       }
@@ -219,7 +227,7 @@ export default function RecentTransactionsTableCard() {
               newFormattedDates[t.id] = parsedDate.toLocaleDateString();
             } else {
               console.warn(`Invalid date string: ${t.date} for transaction ${t.id}`);
-              newFormattedDates[t.id] = t.date; // Fallback to original string
+              newFormattedDates[t.id] = t.date; 
             }
           } catch (e) {
             console.warn(`Could not parse date string: ${t.date} for transaction ${t.id}`, e);
@@ -239,9 +247,15 @@ export default function RecentTransactionsTableCard() {
 
     } catch (error: any) {
       console.error("Failed to fetch transactions:", error);
+       let toastMessage = error.message || "Could not fetch transactions for the selected account.";
+        if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission denied'))) {
+            toastMessage = "Permission denied fetching transactions. Check Firestore rules and ensure data has correct userId.";
+        } else if (error.code === 'failed-precondition' || (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions')))) {
+            toastMessage = "Missing or insufficient Firestore index for fetching transactions. Check Firestore logs for details and a link to create it.";
+        }
       toast({
         title: "Error Loading Transactions",
-        description: error.message || "Could not fetch transactions for the selected account.",
+        description: toastMessage,
         variant: "destructive",
       });
       setTransactions([]);
@@ -264,18 +278,26 @@ export default function RecentTransactionsTableCard() {
     setSelectedAccountId(accountId);
   };
 
-  const refreshData = () => {
-    if (currentUser && selectedAccountId) {
-      fetchTransactions(selectedAccountId, currentUser.uid);
-    }
+  const refreshData = (isAccountChange: boolean = false) => {
     if (currentUser) {
-        fetchAccounts(currentUser.uid); // Also refresh accounts in case of balance changes etc. (future)
+      fetchAccounts(currentUser.uid).then(() => {
+        // If it's not an account change (like adding a new account),
+        // and a selected account still exists or a new one is selected, fetch its transactions.
+        if (!isAccountChange && selectedAccountId) {
+           fetchTransactions(selectedAccountId, currentUser.uid);
+        } else if (isAccountChange && accounts.length > 0 && !accounts.find(a => a.id === selectedAccountId)) {
+            // If the selected account was deleted, select the first available account.
+            setSelectedAccountId(accounts[0].id);
+        } else if (isAccountChange && accounts.length === 0) {
+            setSelectedAccountId(undefined);
+        }
+      });
     }
   };
   
   const handleEditTransaction = (transaction: UITransactionType) => {
     setEditingTransaction(transaction);
-    setIsEditDialogOpen(true);
+    setIsEditTransactionDialogOpen(true);
   };
 
   const handleDeleteTransaction = async () => {
@@ -291,8 +313,37 @@ export default function RecentTransactionsTableCard() {
       console.error("Error deleting transaction:", error);
       toast({ title: "Error Deleting Transaction", description: error.message || "Could not delete transaction.", variant: "destructive" });
     } finally {
-      setIsDeleteDialogOpen(false);
+      setIsDeleteTransactionDialogOpen(false);
       setDeletingTransactionId(null);
+    }
+  };
+
+  const handleEditAccount = () => {
+    const account = accounts.find(acc => acc.id === selectedAccountId);
+    if (account) {
+      setEditingAccount(account);
+      setIsEditAccountDialogOpen(true);
+    } else {
+      toast({ title: "Error", description: "Please select an account to edit.", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!currentUser || !deletingAccountId) {
+      toast({ title: "Error", description: "User or account ID missing for deletion.", variant: "destructive" });
+      return;
+    }
+    try {
+      await deleteAccountService(deletingAccountId, currentUser.uid);
+      toast({ title: "Success", description: "Account deleted successfully." });
+      setSelectedAccountId(undefined); // Reset selected account
+      refreshData(true); // Pass true to indicate an account change that might require re-selecting
+    } catch (error: any) {
+      console.error("Error deleting account:", error);
+      toast({ title: "Error Deleting Account", description: error.message || "Could not delete account.", variant: "destructive" });
+    } finally {
+      setIsDeleteAccountDialogOpen(false);
+      setDeletingAccountId(null);
     }
   };
 
@@ -313,24 +364,39 @@ export default function RecentTransactionsTableCard() {
                 <span className="ml-2 text-sm text-muted-foreground">Accounts...</span>
               </div>
             ) : (
-              <Select onValueChange={handleAccountChange} value={selectedAccountId} disabled={!currentUser || accounts.length === 0 || isLoadingTransactions}>
-                <SelectTrigger className="w-full sm:w-[200px]" aria-label="Select Account">
-                  <SelectValue placeholder="Select account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.length === 0 && <SelectItem value="no-accounts" disabled>No accounts found</SelectItem>}
-                  {accounts.map(account => (
-                    <SelectItem key={account.id} value={account.id}>
-                      <div className="flex items-center gap-2">
-                        <account.icon className="h-4 w-4 text-muted-foreground" />
-                        {account.name} ({account.type})
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2 items-center w-full sm:w-auto">
+                <Select onValueChange={handleAccountChange} value={selectedAccountId} disabled={!currentUser || accounts.length === 0 || isLoadingTransactions}>
+                  <SelectTrigger className="flex-grow sm:w-[200px]" aria-label="Select Account">
+                    <SelectValue placeholder="Select account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.length === 0 && <SelectItem value="no-accounts" disabled>No accounts found</SelectItem>}
+                    {accounts.map(account => (
+                      <SelectItem key={account.id} value={account.id}>
+                        <div className="flex items-center gap-2">
+                          <account.icon className="h-4 w-4 text-muted-foreground" />
+                          {account.name} ({account.type})
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="icon" onClick={handleEditAccount} disabled={!selectedAccountId || isLoadingAccounts || isLoadingTransactions}>
+                  <Edit3 className="h-4 w-4" />
+                  <span className="sr-only">Edit Account</span>
+                </Button>
+                <Button variant="destructive" size="icon" onClick={() => {
+                  if (selectedAccountId) {
+                    setDeletingAccountId(selectedAccountId);
+                    setIsDeleteAccountDialogOpen(true);
+                  }
+                }} disabled={!selectedAccountId || isLoadingAccounts || isLoadingTransactions}>
+                  <Trash2 className="h-4 w-4" />
+                  <span className="sr-only">Delete Account</span>
+                </Button>
+              </div>
             )}
-            <AddAccountDialog currentUser={currentUser} onAccountAdded={refreshData} />
+             <AddAccountDialog currentUser={currentUser} onAccountAdded={() => refreshData(true)} />
           </div>
         </div>
         <CardDescription className="mt-2">
@@ -411,7 +477,7 @@ export default function RecentTransactionsTableCard() {
                         </Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => {
                             setDeletingTransactionId(transaction.id);
-                            setIsDeleteDialogOpen(true);
+                            setIsDeleteTransactionDialogOpen(true);
                         }}>
                           <Trash2 className="h-4 w-4" />
                            <span className="sr-only">Delete</span>
@@ -447,24 +513,24 @@ export default function RecentTransactionsTableCard() {
         <EditTransactionDialog
           currentUser={currentUser}
           transactionToEdit={editingTransaction}
-          open={isEditDialogOpen}
+          open={isEditTransactionDialogOpen}
           onOpenChange={(open) => {
-            setIsEditDialogOpen(open);
+            setIsEditTransactionDialogOpen(open);
             if (!open) setEditingTransaction(null);
           }}
           onTransactionUpdated={() => {
             refreshData();
-            setIsEditDialogOpen(false);
+            setIsEditTransactionDialogOpen(false);
             setEditingTransaction(null);
           }}
           accountName={accounts.find(acc => acc.id === editingTransaction.accountId)?.name}
         />
       )}
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog open={isDeleteTransactionDialogOpen} onOpenChange={setIsDeleteTransactionDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>Delete Transaction?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete this transaction.
             </AlertDialogDescription>
@@ -477,6 +543,41 @@ export default function RecentTransactionsTableCard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {currentUser && editingAccount && (
+        <EditAccountDialog
+          currentUser={currentUser}
+          accountToEdit={editingAccount}
+          open={isEditAccountDialogOpen}
+          onOpenChange={(open) => {
+            setIsEditAccountDialogOpen(open);
+            if (!open) setEditingAccount(null);
+          }}
+          onAccountUpdated={() => {
+            refreshData(true); // Pass true to indicate account list might have changed
+            setIsEditAccountDialogOpen(false);
+            setEditingAccount(null);
+          }}
+        />
+      )}
+
+      <AlertDialog open={isDeleteAccountDialogOpen} onOpenChange={setIsDeleteAccountDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete this account. All associated transactions will remain but will no longer be linked to this account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingAccountId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteAccount} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Yes, delete account
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
+

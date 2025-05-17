@@ -17,7 +17,7 @@ export interface TransactionFirestore {
 }
 
 // Represents a transaction for UI display (includes the actual icon component)
-export interface Transaction extends Omit<TransactionFirestore, 'iconName' | 'id' | 'userId' | 'accountId'> {
+export interface UITransactionType extends Omit<TransactionFirestore, 'iconName' | 'id' | 'userId' | 'accountId'> {
   id: string; // Ensure id is always present for UI keys
   accountId: string;
   icon: LucideIcon;
@@ -79,7 +79,7 @@ export interface UserProfile {
   fullName: string;
   email: string;
   createdAt: Timestamp;
-  // Add other profile fields here if needed, e.g., notificationPreferences
+  photoURL?: string | null;
 }
 
 // Represents the summary of monthly financial data
@@ -107,6 +107,10 @@ export interface Account {
 export interface UIAccount extends Omit<Account, 'iconName' | 'createdAt'> {
   icon: LucideIcon;
 }
+
+// Data for updating an account, excluding non-updatable fields
+export type AccountUpdateData = Partial<Omit<Account, 'id' | 'userId' | 'createdAt'>>;
+
 
 // For Add Transaction Dialog
 export const TransactionCategories = [

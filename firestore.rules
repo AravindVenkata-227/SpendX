@@ -7,34 +7,40 @@ service cloud.firestore {
     // Users Collection
     // Users can create their own profile.
     // Users can read and update their own profile.
-    // Users cannot delete their profile through this rule (deletion might be an admin task or a specific function).
+    // Users cannot delete their own profile through this rule (deletion might be an admin task or handled differently).
     match /users/{userId} {
       allow read, update: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.id == request.auth.uid;
+      allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.id == userId;
     }
 
     // Transactions Collection
-    // Users can create transactions for themselves.
-    // Users can only read, update, or delete their own transactions.
+    // Authenticated users can create transactions where the transaction's userId matches their auth uid.
+    // Authenticated users can read, update, and delete transactions where the transaction's userId matches their auth uid.
     match /transactions/{transactionId} {
-      allow read, update, delete: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.resource.data.userId != null && request.resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+                       request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if request.auth != null && 
+                                     resource.data.userId != null && resource.data.userId == request.auth.uid;
     }
 
     // Goals Collection
-    // Users can create goals for themselves.
-    // Users can only read, update, or delete their own goals.
+    // Authenticated users can create goals where the goal's userId matches their auth uid.
+    // Authenticated users can read, update, and delete goals where the goal's userId matches their auth uid.
     match /goals/{goalId} {
-      allow read, update, delete: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.resource.data.userId != null && request.resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+                       request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if request.auth != null && 
+                                     resource.data.userId != null && resource.data.userId == request.auth.uid;
     }
-    
+
     // Accounts Collection
-    // Users can create accounts for themselves.
-    // Users can only read, update, or delete their own accounts.
+    // Authenticated users can create accounts where the account's userId matches their auth uid.
+    // Authenticated users can read, update, and delete accounts where the account's userId matches their auth uid.
     match /accounts/{accountId} {
-      allow read, update, delete: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.resource.data.userId != null && request.resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+                       request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if request.auth != null && 
+                                     resource.data.userId != null && resource.data.userId == request.auth.uid;
     }
   }
 }

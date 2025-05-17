@@ -2,12 +2,23 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth"; // Added
+import { getAuth } from "firebase/auth";
+
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+
+// Explicitly check if the API key is available.
+// This is crucial for server-side rendering and server components.
+if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+  throw new Error(
+    "Firebase API Key (NEXT_PUBLIC_FIREBASE_API_KEY) is missing or undefined. " +
+    "Please ensure it is correctly set in your .env.local file and that you have restarted your development server."
+  );
+}
+
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -27,6 +38,6 @@ if (!getApps().length) {
 }
 
 const db = getFirestore(app);
-const auth = getAuth(app); // Added
+const auth = getAuth(app);
 
-export { app, db, auth }; // Added auth
+export { app, db, auth };

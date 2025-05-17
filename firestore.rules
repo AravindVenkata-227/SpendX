@@ -4,63 +4,58 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users Collection
-    // Users can:
-    // - Create their own user document (userId must match auth.uid).
-    // - Read their own user document.
-    // - Update their own user document (but not change id, email, createdAt).
-    // - Cannot delete their own user document (for now).
+    // Users:
+    // - Anyone can create their own user profile document.
+    // - Authenticated users can read, delete their own profile.
+    // - Authenticated users can update their own profile, but cannot change 'id', 'email', or 'createdAt' fields.
     match /users/{userId} {
-      allow create: if request.auth != null && 
-                       request.auth.uid == userId;
-      allow read: if request.auth != null && 
-                     request.auth.uid == userId;
-      allow update: if request.auth != null && 
-                       request.auth.uid == userId &&
-                       !(request.resource.data.keySet().hasAny(['id', 'email', 'createdAt'])); 
-      allow delete: if false; // Or implement admin-only delete if needed
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+
+      allow update: if request.auth != null && request.auth.uid == userId &&
+                    // Ensure the 'id' field in the document (which should match userId) is not changed.
+                    request.resource.data.id == resource.data.id &&
+                    // Ensure email is not changed.
+                    request.resource.data.email == resource.data.email &&
+                    // Ensure createdAt is not changed.
+                    // This handles cases where createdAt might be null (e.g., for very old documents or before serverTimestamp resolves)
+                    // or is a valid Timestamp.
+                    (
+                      (resource.data.createdAt == null && request.resource.data.createdAt == null) ||
+                      (resource.data.createdAt != null && request.resource.data.createdAt != null &&
+                       request.resource.data.createdAt.toMillis() == resource.data.createdAt.toMillis())
+                    );
+                    // Other fields like fullName, notificationPreferences, photoURL can be updated.
     }
 
-    // Transactions Collection
-    // Users can:
-    // - Create transactions if they are authenticated and the userId in the new doc matches their auth.uid.
-    // - Read, update, delete their own transactions (userId in the doc must match their auth.uid).
+    // Transactions:
+    // - Users can only CRUD their own transactions.
     match /transactions/{transactionId} {
-      allow create: if request.auth != null && 
-                       'userId' in request.resource.data && 
-                       request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if request.auth != null && 
-                                     resource.data != null && // Ensure document exists for read/update/delete
-                                     'userId' in resource.data && 
-                                     resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId &&
+                       request.auth.uid == request.resource.data.userId; // Owns existing and new version
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
 
-    // Goals Collection
-    // Users can:
-    // - Create goals if they are authenticated and the userId in the new doc matches their auth.uid.
-    // - Read, update, delete their own goals (userId in the doc must match their auth.uid).
+    // Goals:
+    // - Users can only CRUD their own goals.
     match /goals/{goalId} {
-      allow create: if request.auth != null && 
-                       'userId' in request.resource.data && 
-                       request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if request.auth != null && 
-                                     resource.data != null && 
-                                     'userId' in resource.data && 
-                                     resource.data.userId == request.auth.uid;
+       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+       allow update: if request.auth != null && request.auth.uid == resource.data.userId &&
+                        request.auth.uid == request.resource.data.userId; // Owns existing and new version
+       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
-    
-    // Accounts Collection
-    // Users can:
-    // - Create accounts if they are authenticated and the userId in the new doc matches their auth.uid.
-    // - Read, update, delete their own accounts (userId in the doc must match their auth.uid).
+
+    // Accounts:
+    // - Users can only CRUD their own accounts.
     match /accounts/{accountId} {
-      allow create: if request.auth != null && 
-                       'userId' in request.resource.data && 
-                       request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if request.auth != null &&
-                                     resource.data != null &&
-                                     'userId' in resource.data && 
-                                     resource.data.userId == request.auth.uid;
+       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+       allow update: if request.auth != null && request.auth.uid == resource.data.userId &&
+                        request.auth.uid == request.resource.data.userId; // Owns existing and new version
+       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
   }
 }

@@ -29,11 +29,11 @@ const spendingData: SpendingCategory[] = [
 ];
 
 const chartConfig = {
-  food: { label: "Food", color: "hsl(var(--chart-1))" },
-  bills: { label: "Bills", color: "hsl(var(--chart-2))" },
-  shopping: { label: "Shopping", color: "hsl(var(--chart-3))" },
-  transport: { label: "Transport", color: "hsl(var(--chart-4))" },
-  entertainment: { label: "Entertainment", color: "hsl(var(--chart-5))" },
+  "Food": { label: "Food", color: "hsl(var(--chart-1))" },
+  "Bills": { label: "Bills", color: "hsl(var(--chart-2))" },
+  "Shopping": { label: "Shopping", color: "hsl(var(--chart-3))" },
+  "Transport": { label: "Transport", color: "hsl(var(--chart-4))" },
+  "Entertainment": { label: "Entertainment", color: "hsl(var(--chart-5))" },
 } satisfies ChartConfig;
 
 
@@ -89,3 +89,4 @@ export default function SpendingCategoryChartCard() {
     </Card>
   );
 }
+

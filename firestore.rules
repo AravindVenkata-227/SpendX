@@ -2,42 +2,68 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Transactions: Users can only read/write/delete their own transactions.
-    match /transactions/{transactionId} {
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-    }
 
-    // Goals: Users can only manage their own goals.
-    match /goals/{goalId} {
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-    }
-    
-    // Accounts: Users can only manage their own accounts.
-    match /accounts/{accountId} {
-      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-    }
-
-    // User Profiles:
-    // Users can read their own profile.
-    // Users can create their own profile.
-    // Users can update their own profile, but cannot change their email, ID, or creation timestamp.
+    // Users Collection
+    // Each user document is identified by their Firebase Auth UID.
     match /users/{userId} {
+      // Allow a user to read their own profile.
       allow read: if request.auth != null && request.auth.uid == userId;
+
+      // Allow a user to create their own profile document upon signup.
+      // Ensures the document ID matches the authenticated user's UID.
       allow create: if request.auth != null && request.auth.uid == userId;
-      // Allow update if the user is authenticated and owns the profile,
-      // AND the update operation itself is not trying to change 'id', 'email', or 'createdAt'.
-      // This implicitly allows changes to other fields like 'fullName', 'photoURL', 'notificationPreferences'.
+
+      // Allow a user to update their own profile.
+      // Prevents changing immutable fields like id, email, or createdAt.
+      // Allows changes to mutable fields like fullName, photoURL, notificationPreferences.
       allow update: if request.auth != null &&
                        request.auth.uid == userId &&
-                       // Check if 'id' is being changed (it shouldn't be in the update payload)
-                       (request.resource.data.id == resource.data.id) &&
-                       // Check if 'email' is being changed
-                       (request.resource.data.email == resource.data.email) &&
-                       // Check if 'createdAt' is being changed
-                       (request.resource.data.createdAt == resource.data.createdAt);
+                       // Ensure 'id' is not being changed if it's part of the update
+                       !( 'id' in request.resource.data && request.resource.data.id != resource.data.id ) &&
+                       // Ensure 'email' is not being changed if it's part of the update
+                       !( 'email' in request.resource.data && request.resource.data.email != resource.data.email ) &&
+                       // Ensure 'createdAt' is not being changed if it's part of the update
+                       !( 'createdAt' in request.resource.data && request.resource.data.createdAt != resource.data.createdAt );
+      
+      // Generally, profiles are not deleted by users themselves.
+      // Add allow delete rule if needed, with appropriate conditions.
+      allow delete: if false; // Or implement specific admin/user deletion logic
+    }
+
+    // Accounts Collection
+    // Transactions are linked to an accountId and a userId.
+    match /accounts/{accountId} {
+      // Allow read, write, update, delete only if the user is authenticated
+      // and the userId in the document matches the authenticated user's UID.
+      allow read, write, update, delete: if request.auth != null &&
+                           'userId' in resource.data && resource.data.userId == request.auth.uid;
+      // For create, check the incoming data's userId.
+      allow create: if request.auth != null &&
+                       'userId' in request.resource.data && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Transactions Collection
+    // Transactions are linked to an accountId and a userId.
+    match /transactions/{transactionId} {
+      // Allow read, write, update, delete only if the user is authenticated
+      // and the userId in the document matches the authenticated user's UID.
+      allow read, write, update, delete: if request.auth != null &&
+                           'userId' in resource.data && resource.data.userId == request.auth.uid;
+      // For create, check the incoming data's userId.
+      allow create: if request.auth != null &&
+                       'userId' in request.resource.data && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Goals Collection
+    // Goals are linked to a userId.
+    match /goals/{goalId} {
+      // Allow read, write, update, delete only if the user is authenticated
+      // and the userId in the document matches the authenticated user's UID.
+      allow read, write, update, delete: if request.auth != null &&
+                           'userId' in resource.data && resource.data.userId == request.auth.uid;
+      // For create, check the incoming data's userId.
+      allow create: if request.auth != null &&
+                       'userId' in request.resource.data && request.resource.data.userId == request.auth.uid;
     }
   }
 }

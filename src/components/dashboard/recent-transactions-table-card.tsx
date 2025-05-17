@@ -72,7 +72,7 @@ const categoryIcons: { [key: string]: React.ElementType } = {
 
 // Helper function to map Firestore transaction to UI transaction
 const mapFirestoreTransactionToUI = (transaction: TransactionFirestore): UITransactionType => {
-  const IconComponent = categoryIcons[transaction.category] || transaction.iconName && categoryIcons[transaction.iconName] || categoryIcons.Default;
+  const IconComponent = categoryIcons[transaction.category] || (transaction.iconName && categoryIcons[transaction.iconName]) || categoryIcons.Default;
   return {
     ...transaction,
     id: transaction.id!,
@@ -87,10 +87,13 @@ export default function RecentTransactionsTableCard() {
   const [transactions, setTransactions] = useState<UITransactionType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const [formattedDates, setFormattedDates] = useState<Record<string, string>>({});
+
 
   const fetchTransactions = useCallback(async (accountId: string | undefined) => {
     if (!accountId) {
       setTransactions([]);
+      setFormattedDates({});
       return;
     }
     setIsLoading(true);
@@ -98,19 +101,36 @@ export default function RecentTransactionsTableCard() {
       const firestoreTransactions = await getTransactionsByAccountId(accountId);
       const uiTransactions = firestoreTransactions.map(mapFirestoreTransactionToUI);
       setTransactions(uiTransactions);
-      const selectedAccountName = MOCK_ACCOUNTS.find(acc => acc.id === accountId)?.name || 'Selected Account';
-      toast({
-        title: "Transactions Loaded",
-        description: `Displaying transactions for ${selectedAccountName}.`,
+
+      // Client-side date formatting
+      const newFormattedDates: Record<string, string> = {};
+      uiTransactions.forEach(t => {
+        newFormattedDates[t.id] = new Date(t.date).toLocaleDateString();
       });
+      setFormattedDates(newFormattedDates);
+
+      const selectedAccountName = MOCK_ACCOUNTS.find(acc => acc.id === accountId)?.name || 'Selected Account';
+      if (firestoreTransactions.length > 0) {
+        toast({
+          title: "Transactions Loaded",
+          description: `Displaying transactions for ${selectedAccountName}.`,
+        });
+      } else {
+        toast({
+          title: "No Transactions",
+          description: `No transactions found for ${selectedAccountName}. You can add some using the button.`,
+          variant: "default"
+        });
+      }
     } catch (error) {
       console.error("Failed to fetch transactions:", error);
       toast({
-        title: "Error",
-        description: "Could not fetch transactions from the database.",
+        title: "Error Loading Transactions",
+        description: "Could not fetch transactions. Please check server logs for details (e.g., Firestore permissions or missing indexes).",
         variant: "destructive",
       });
-      setTransactions([]); // Clear transactions on error
+      setTransactions([]); 
+      setFormattedDates({});
     } finally {
       setIsLoading(false);
     }
@@ -124,28 +144,35 @@ export default function RecentTransactionsTableCard() {
     setSelectedAccountId(accountId);
   };
 
-  // Mock function to add a sample transaction - for testing "Storing"
   const handleAddSampleTransaction = async () => {
     if (!selectedAccountId) {
       toast({ title: "No Account Selected", description: "Please select an account first.", variant: "destructive" });
       return;
     }
+    // Ensure date is in YYYY-MM-DD, and valid for new Date()
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = (today.getMonth() + 1).toString().padStart(2, '0'); // JS months are 0-indexed
+    const day = today.getDate().toString().padStart(2, '0');
+    const transactionDate = `${year}-${month}-${day}`;
+
     const newTransactionData: Omit<TransactionFirestore, 'id'> = {
       accountId: selectedAccountId,
-      date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD
+      date: transactionDate,
       description: "Sample Online Purchase",
       category: "Shopping",
-      amount: -(Math.floor(Math.random() * 200) + 50), // Random amount between 50-250
+      amount: -(Math.floor(Math.random() * 200) + 50), 
       type: "debit",
       iconName: "ShoppingCart",
     };
     try {
-      setIsLoading(true); // Show loader while adding
+      setIsLoading(true); 
       await addTransaction(newTransactionData);
       toast({ title: "Transaction Added", description: "Sample transaction successfully added to Firestore." });
-      await fetchTransactions(selectedAccountId); // Refresh the list
+      await fetchTransactions(selectedAccountId); 
     } catch (error) {
       toast({ title: "Error Adding Transaction", description: "Could not add sample transaction.", variant: "destructive" });
+      console.error("Error adding sample transaction:", error);
     } finally {
       setIsLoading(false);
     }
@@ -176,7 +203,7 @@ export default function RecentTransactionsTableCard() {
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={handleAddSampleTransaction} variant="outline" className="w-full sm:w-auto">
+            <Button onClick={handleAddSampleTransaction} variant="outline" className="w-full sm:w-auto" disabled={isLoading}>
               <PlusCircle className="mr-2 h-4 w-4" /> Add Sample Tx
             </Button>
           </div>
@@ -212,7 +239,7 @@ export default function RecentTransactionsTableCard() {
                   </TableRow>
                 ) : (
                   transactions.map((transaction) => {
-                    const Icon = transaction.icon; // Already mapped
+                    const Icon = transaction.icon; 
                     return (
                     <TableRow key={transaction.id}>
                       <TableCell>
@@ -229,7 +256,7 @@ export default function RecentTransactionsTableCard() {
                       <TableCell>
                         <Badge variant="outline">{transaction.category}</Badge>
                       </TableCell>
-                      <TableCell>{new Date(transaction.date).toLocaleDateString()}</TableCell>
+                      <TableCell>{formattedDates[transaction.id] || transaction.date}</TableCell>
                       <TableCell
                         className={cn(
                           "text-right font-semibold",

@@ -70,11 +70,17 @@ export async function getTransactionsByAccountId(accountId: string, userId: stri
       } as TransactionFirestore);
     });
     return transactions;
-  } catch (e) {
+  } catch (e: any) {
+    let detailedMessage = "Could not fetch transactions. Check server logs for details (e.g., Firestore permissions or missing indexes).";
+    if (e && e.code === 'permission-denied') {
+      detailedMessage = "Permission denied fetching transactions. Please check Firestore rules and ensure you are authenticated with appropriate rights.";
+    } else if (e && e.message && typeof e.message === 'string' && e.message.toLowerCase().includes("index")) {
+      detailedMessage = "Failed to fetch transactions, possibly due to a missing Firestore index. Please check server logs for a link to create the required index.";
+    }
     console.error(`Error fetching transactions for account ${accountId}, user ${userId}: `, e);
     // Check console for Firebase permission errors or missing index errors
     // Firestore usually provides a link to create missing indexes if that's the issue.
-    throw new Error("Could not fetch transactions. Check server logs for details (e.g., Firestore permissions or missing indexes).");
+    throw new Error(detailedMessage);
   }
 }
 

@@ -127,7 +127,11 @@ const mapFirestoreTransactionToUI = (transaction: TransactionFirestore): UITrans
   };
 };
 
-export default function RecentTransactionsTableCard() {
+interface RecentTransactionsTableCardProps {
+  onDataChange: () => void;
+}
+
+export default function RecentTransactionsTableCard({ onDataChange }: RecentTransactionsTableCardProps) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [accounts, setAccounts] = useState<UIAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>(undefined);
@@ -178,16 +182,16 @@ export default function RecentTransactionsTableCard() {
         }
       } else if (uiAccounts.length === 0) {
         setSelectedAccountId(undefined);
-        setTransactions([]); // Clear transactions if no accounts
+        setTransactions([]); 
         setFormattedDates({});
       }
-      return uiAccounts; // Return fetched accounts
+      return uiAccounts; 
     } catch (error: any) {
       console.error("Failed to fetch accounts:", error);
       let toastMessage = error.message || "Could not fetch your accounts.";
-      if (error.message && error.message.toLowerCase().includes('permission denied')) {
+      if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission denied'))) {
         toastMessage = "Permission denied fetching accounts. Ensure Firestore rules are deployed and allow access, and that account documents have the correct 'userId' matching the authenticated user.";
-      } else if (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions'))) {
+      } else if (error.code === 'failed-precondition' || (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions')))) {
          toastMessage = "Missing or insufficient Firestore index for fetching accounts. Check Firestore logs for details and a link to create it.";
       }
       toast({
@@ -197,9 +201,9 @@ export default function RecentTransactionsTableCard() {
       });
       setAccounts([]);
       setSelectedAccountId(undefined);
-      setTransactions([]); // Clear transactions on error
+      setTransactions([]); 
       setFormattedDates({});
-      return []; // Return empty array on error
+      return []; 
     } finally {
       setIsLoadingAccounts(false);
     }
@@ -262,9 +266,9 @@ export default function RecentTransactionsTableCard() {
     } catch (error: any) {
       console.error("Failed to fetch transactions:", error);
        let toastMessage = error.message || "Could not fetch transactions for the selected account.";
-        if (error.message && error.message.toLowerCase().includes('permission denied')) {
+        if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission denied'))) {
             toastMessage = "Permission denied fetching transactions. Check Firestore rules and ensure data has correct userId.";
-        } else if (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions'))) {
+        } else if (error.code === 'failed-precondition' || (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions')))) {
             toastMessage = "Missing or insufficient Firestore index for fetching transactions. Check Firestore logs for details and a link to create it.";
         }
       toast({
@@ -282,7 +286,7 @@ export default function RecentTransactionsTableCard() {
   useEffect(() => {
     if (currentUser && selectedAccountId) {
         fetchTransactions(selectedAccountId, currentUser.uid);
-    } else if (!selectedAccountId && accounts.length === 0) { // Handles case where accounts are empty initially
+    } else if (!selectedAccountId && accounts.length === 0) { 
         setTransactions([]);
         setFormattedDates({});
     }
@@ -292,10 +296,10 @@ export default function RecentTransactionsTableCard() {
     setSelectedAccountId(accountId);
   };
 
-  const refreshData = (isAccountChange: boolean = false, newSelectedAccountId?: string) => {
+  const refreshData = useCallback((isAccountChange: boolean = false, newSelectedAccountId?: string) => {
     if (currentUser) {
       fetchAccounts(currentUser.uid).then((fetchedAccs) => { 
-        const currentFetchedAccounts = fetchedAccs || accounts; // Use newly fetched or existing
+        const currentFetchedAccounts = fetchedAccs || accounts; 
         
         let idToSelect = selectedAccountId;
 
@@ -309,17 +313,18 @@ export default function RecentTransactionsTableCard() {
           }
         }
         
-        setSelectedAccountId(idToSelect); // Update selected account ID state
+        setSelectedAccountId(idToSelect); 
 
-        if (idToSelect) { // Fetch transactions if an ID is selected
+        if (idToSelect) { 
           fetchTransactions(idToSelect, currentUser.uid);
         } else {
-          setTransactions([]); // Clear transactions if no account is selected
+          setTransactions([]); 
           setFormattedDates({});
         }
+        onDataChange(); // Signal data has changed
       });
     }
-  };
+  }, [currentUser, fetchAccounts, accounts, selectedAccountId, fetchTransactions, onDataChange]);
   
   const handleEditTransaction = (transaction: UITransactionType) => {
     setEditingTransaction(transaction);
@@ -359,19 +364,18 @@ export default function RecentTransactionsTableCard() {
       toast({ title: "Error", description: "User or account ID missing for deletion.", variant: "destructive" });
       return;
     }
-    const accountToDeleteId = deletingAccountId; // Store before state is cleared
+    const accountToDeleteId = deletingAccountId; 
     try {
       await deleteAccountService(accountToDeleteId, currentUser.uid);
       toast({ title: "Success", description: "Account deleted successfully." });
       
-      // Determine the next account to select
       const remainingAccounts = accounts.filter(acc => acc.id !== accountToDeleteId);
       let nextSelectedId: string | undefined = undefined;
       if (remainingAccounts.length > 0) {
-        if (selectedAccountId === accountToDeleteId) { // If the deleted account was selected
-          nextSelectedId = remainingAccounts[0].id; // Select the first of the remaining
+        if (selectedAccountId === accountToDeleteId) { 
+          nextSelectedId = remainingAccounts[0].id; 
         } else {
-          nextSelectedId = selectedAccountId; // Keep current selection if it wasn't the one deleted
+          nextSelectedId = selectedAccountId; 
         }
       }
       refreshData(true, nextSelectedId);
@@ -618,4 +622,3 @@ export default function RecentTransactionsTableCard() {
     </>
   );
 }
-

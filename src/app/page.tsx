@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const [currentYear, setCurrentYear] = useState<number | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0); // Key to trigger data refresh in child components
   const router = useRouter();
 
   useEffect(() => {
@@ -33,7 +34,11 @@ export default function DashboardPage() {
     return () => unsubscribe();
   }, [router]);
 
-  if (isLoadingAuth) { // Show loader if still checking auth state or if no user (before redirect kicks in)
+  const handleTransactionDataChange = () => {
+    setRefreshKey(prevKey => prevKey + 1);
+  };
+
+  if (isLoadingAuth) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -42,7 +47,7 @@ export default function DashboardPage() {
     );
   }
   
-  if (!currentUser) { // This case handles the brief moment before redirection or if redirection is slow.
+  if (!currentUser) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -56,17 +61,17 @@ export default function DashboardPage() {
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <Header />
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6">
-        <SummarySection />
+        <SummarySection refreshTrigger={refreshKey} />
         <FinancialInsightsCard />
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <div className="lg:col-span-3">
-            <ChartsSection />
+            <ChartsSection refreshTrigger={refreshKey} />
           </div>
           <div className="lg:col-span-2">
             <GoalsSection />
           </div>
         </div>
-        <TransactionsSection />
+        <TransactionsSection onDataChange={handleTransactionDataChange} />
       </main>
       <footer className="py-6 px-4 md:px-6 border-t">
         <p className="text-center text-sm text-muted-foreground">

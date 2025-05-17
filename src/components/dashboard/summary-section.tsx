@@ -11,7 +11,11 @@ import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 
-export default function SummarySection() {
+interface SummarySectionProps {
+  refreshTrigger: number;
+}
+
+export default function SummarySection({ refreshTrigger }: SummarySectionProps) {
   const [financialHealth, setFinancialHealth] = useState<FinancialHealthOutput | null>(null);
   const [isLoadingHealth, setIsLoadingHealth] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -104,7 +108,7 @@ export default function SummarySection() {
     } finally {
       setIsLoadingHealth(false);
     }
-  }, [toast]);
+  }, [toast]); // formatCurrency is stable, no need to include
 
   useEffect(() => {
     if (currentUser) {
@@ -115,7 +119,7 @@ export default function SummarySection() {
       setMonthlySummary(null);
       setFinancialHealth(null);
     }
-  }, [currentUser, fetchAllSummaries]);
+  }, [currentUser, fetchAllSummaries, refreshTrigger]); // Add refreshTrigger here
   
   const renderSummaryValue = (value: number | undefined | null, isLoading: boolean) => {
     if (isLoading) return <Loader2 className="h-5 w-5 animate-spin" />;

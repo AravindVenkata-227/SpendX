@@ -26,29 +26,38 @@ import type { User } from "firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
 
-// Predefined chart configuration for known categories and their colors
-// This helps maintain consistent coloring.
 const PREDEFINED_CHART_CONFIG: ChartConfig = {
   "Food": { label: "Food", color: "hsl(var(--chart-1))" },
   "Bills": { label: "Bills", color: "hsl(var(--chart-2))" },
   "Shopping": { label: "Shopping", color: "hsl(var(--chart-3))" },
   "Transport": { label: "Transport", color: "hsl(var(--chart-4))" },
   "Entertainment": { label: "Entertainment", color: "hsl(var(--chart-5))" },
-  "Other": { label: "Other", color: "hsl(var(--muted))" }, // A fallback color for other categories
+  "Other": { label: "Other", color: "hsl(var(--muted))" }, 
+  "Groceries": { label: "Groceries", color: "hsl(var(--chart-1))" }, // Example, can reuse or add more chart colors
+  "Utilities": { label: "Utilities", color: "hsl(var(--chart-2))" },
+  "Rent/Mortgage": { label: "Rent/Mortgage", color: "hsl(var(--chart-3))" },
+  "Health": { label: "Health", color: "hsl(var(--chart-4))" },
+  "Education": { label: "Education", color: "hsl(var(--chart-5))" },
+  "Income": { label: "Income", color: "hsl(var(--accent))" }, // Income is not typically in spending chart
+  "Investment": { label: "Investment", color: "hsl(var(--chart-1))" },
+  "Travel": { label: "Travel", color: "hsl(var(--chart-2))" },
+  "Gifts": { label: "Gifts", color: "hsl(var(--chart-3))" },
 };
 
-// Array of fallback colors if a category is not in PREDEFINED_CHART_CONFIG
-// and we have more than 5 categories with data.
 const FALLBACK_CHART_COLORS = [
   "hsl(var(--chart-1))",
   "hsl(var(--chart-2))",
   "hsl(var(--chart-3))",
   "hsl(var(--chart-4))",
   "hsl(var(--chart-5))",
-  "hsl(var(--accent))", // Using accent as a 6th color
+  "hsl(var(--accent))", 
 ];
 
-export default function SpendingCategoryChartCard() {
+interface SpendingCategoryChartCardProps {
+  refreshTrigger: number;
+}
+
+export default function SpendingCategoryChartCard({ refreshTrigger }: SpendingCategoryChartCardProps) {
   const [currentUser, setCurrentUser] = React.useState<User | null>(null);
   const [spendingData, setSpendingData] = React.useState<SpendingCategory[]>([]);
   const [chartDisplayConfig, setChartDisplayConfig] = React.useState<ChartConfig>({});
@@ -60,7 +69,6 @@ export default function SpendingCategoryChartCard() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (!user) {
-        // Clear data if user logs out
         setSpendingData([]);
         setChartDisplayConfig({});
         setTotalMonthlySpending(0);
@@ -72,7 +80,7 @@ export default function SpendingCategoryChartCard() {
 
   React.useEffect(() => {
     if (!currentUser) {
-      setIsLoading(false); // Not loading if no user
+      setIsLoading(false); 
       return;
     }
 
@@ -81,7 +89,7 @@ export default function SpendingCategoryChartCard() {
       try {
         const now = new Date();
         const year = now.getFullYear();
-        const month = now.getMonth() + 1; // JavaScript months are 0-indexed
+        const month = now.getMonth() + 1; 
 
         const transactions: TransactionFirestore[] = await getTransactionsForMonth(currentUser.uid, year, month);
 
@@ -91,7 +99,7 @@ export default function SpendingCategoryChartCard() {
         transactions.forEach(transaction => {
           if (transaction.type === 'debit') {
             const amount = Math.abs(transaction.amount);
-            const categoryName = transaction.category || "Other"; // Default to "Other" if category is missing
+            const categoryName = transaction.category || "Other"; 
             categoryMap[categoryName] = (categoryMap[categoryName] || 0) + amount;
             currentTotalSpending += amount;
           }
@@ -106,8 +114,8 @@ export default function SpendingCategoryChartCard() {
               fill: configEntry ? configEntry.color : FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length],
             };
           })
-          .sort((a, b) => b.value - a.value) // Sort by value descending for better chart readability
-          .slice(0, 6); // Limit to top 6 categories for chart clarity
+          .sort((a, b) => b.value - a.value) 
+          .slice(0, 6); 
 
         setSpendingData(newSpendingData);
         setTotalMonthlySpending(currentTotalSpending);
@@ -138,7 +146,7 @@ export default function SpendingCategoryChartCard() {
     };
 
     fetchAndProcessTransactions();
-  }, [currentUser, toast]);
+  }, [currentUser, toast, refreshTrigger]); // Add refreshTrigger here
 
   if (isLoading) {
     return (
@@ -216,10 +224,6 @@ export default function SpendingCategoryChartCard() {
         </ChartContainer>
       </CardContent>
       <CardFooter className="flex-col gap-2 text-sm">
-        {/* Placeholder for trend, can be implemented later */}
-        {/* <div className="flex items-center gap-2 font-medium leading-none">
-          Trending up by 5% this month <TrendingUp className="h-4 w-4" />
-        </div> */}
         <div className="leading-none text-muted-foreground">
           Showing total spending for the current month (Total: ₹{totalMonthlySpending.toLocaleString()})
         </div>

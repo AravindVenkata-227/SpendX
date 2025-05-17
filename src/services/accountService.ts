@@ -20,7 +20,7 @@ export async function addAccount(accountData: Omit<Account, 'id' | 'createdAt'>)
 
   const dataToSave: any = {
     ...accountData,
-    accountNumberLast4: accountData.accountNumberLast4, // Ensure it's explicitly included
+    accountNumberLast4: accountData.accountNumberLast4,
     createdAt: serverTimestamp(),
   };
 
@@ -61,7 +61,7 @@ export async function getAccountsByUserId(userId: string): Promise<Account[]> {
         name: data.name,
         type: data.type as AccountType,
         iconName: data.iconName,
-        accountNumberLast4: data.accountNumberLast4, // Will always be a string now
+        accountNumberLast4: data.accountNumberLast4,
         createdAt: data.createdAt as Timestamp,
       } as Account);
     });
@@ -98,7 +98,6 @@ export async function updateAccount(accountId: string, userId: string, updateDat
   const accountRef = doc(db, 'accounts', accountId);
   
   const dataToUpdate: any = { ...updateData };
-  // Ensure accountNumberLast4 is explicitly set if present in updateData
   if (updateData.accountNumberLast4 !== undefined) {
     dataToUpdate.accountNumberLast4 = updateData.accountNumberLast4;
   }
@@ -115,8 +114,7 @@ export async function updateAccount(accountId: string, userId: string, updateDat
 }
 
 /**
- * Deletes an account from Firestore.
- * Before deleting the account, it re-categorizes all associated transactions to "Other".
+ * Deletes an account and all its associated transactions from Firestore.
  * @param accountId - The ID of the account to delete.
  * @param userId - The ID of the user making the deletion (for rule verification).
  */
@@ -133,29 +131,33 @@ export async function deleteAccount(accountId: string, userId: string): Promise<
   const batch = writeBatch(db);
 
   try {
-    // 1. Find and update associated transactions
+    // 1. Find and prepare to delete associated transactions
     const transactionsCol = collection(db, 'transactions');
+    // Note: Firestore rules must allow the user to query and delete these transactions.
+    // The query ensures we only target transactions belonging to this user and account.
     const q = query(transactionsCol, where('accountId', '==', accountId), where('userId', '==', userId));
     const querySnapshot = await getDocs(q);
 
     querySnapshot.forEach((transactionDoc) => {
       const transactionRef = doc(db, 'transactions', transactionDoc.id);
-      batch.update(transactionRef, {
-        category: "Other",
-        iconName: "CircleDollarSign" // Assuming "CircleDollarSign" is the icon for "Other"
-      });
+      batch.delete(transactionRef);
     });
+    console.log(`Prepared ${querySnapshot.size} transactions for deletion associated with account ${accountId}.`);
 
-    // 2. Delete the account
+    // 2. Prepare to delete the account
     const accountRef = doc(db, 'accounts', accountId);
     batch.delete(accountRef);
 
     // 3. Commit the batch
     await batch.commit();
-    console.log("Account deleted and transactions re-categorized for ID: ", accountId);
+    console.log("Account and its associated transactions deleted successfully for ID: ", accountId);
 
   } catch (e: any) {
-    console.error("Error deleting account and re-categorizing transactions: ", e);
-    throw new Error(e.message || "Could not delete account or update its transactions.");
+    console.error("Error deleting account and its transactions: ", e);
+    // Provide more specific feedback if possible
+    if (e.code === 'permission-denied') {
+        throw new Error("Permission denied. You may not have the rights to delete this account or its transactions, or some fields are restricted by Firestore rules.");
+    }
+    throw new Error(e.message || "Could not delete account or its transactions.");
   }
 }

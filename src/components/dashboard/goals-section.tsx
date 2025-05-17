@@ -34,7 +34,7 @@ const mapFirestoreGoalToUIGoal = (firestoreGoal: FirestoreGoal): UIGoal => {
     targetAmount: firestoreGoal.targetAmount,
     savedAmount: firestoreGoal.savedAmount,
     icon: IconComponent,
-    createdAt: firestoreGoal.createdAt, // Keep createdAt if needed for display or sorting on UI
+    createdAt: firestoreGoal.createdAt,
   };
 };
 
@@ -43,32 +43,33 @@ export default function GoalsSection() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [goals, setGoals] = useState<UIGoal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasShownNoGoalsToast, setHasShownNoGoalsToast] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (!user) {
-        setGoals([]); // Clear goals if user logs out
+        setGoals([]); 
         setIsLoading(false);
+        setHasShownNoGoalsToast(false); // Reset toast flag on logout
       }
     });
     return () => unsubscribe();
   }, []);
 
+  // Reset hasShownNoGoalsToast when currentUser changes, so toast can re-evaluate for new user
+  useEffect(() => {
+    setHasShownNoGoalsToast(false);
+  }, [currentUser]);
+
   const fetchGoals = useCallback(async (userId: string) => {
     setIsLoading(true);
+    // setHasShownNoGoalsToast(false); // Reset here if we want toast on every re-fetch for same user
     try {
       const firestoreGoals = await getGoalsByUserId(userId);
       const uiGoals = firestoreGoals.map(mapFirestoreGoalToUIGoal);
       setGoals(uiGoals);
-      if (firestoreGoals.length === 0 && !isLoading) { // Check isLoading to avoid premature toast
-        toast({
-          title: "No Savings Goals",
-          description: "You haven't set any savings goals yet. Click 'Add New Goal' to start!",
-          variant: "default"
-        });
-      }
     } catch (error) {
       console.error("Failed to fetch goals in component:", error);
       toast({
@@ -80,17 +81,28 @@ export default function GoalsSection() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast, isLoading]); // Added isLoading to dependency array
+  }, [toast]); // mapFirestoreGoalToUIGoal is stable as it's outside component
 
   useEffect(() => {
     if (currentUser) {
       fetchGoals(currentUser.uid);
     } else {
-      setGoals([]);
-      setIsLoading(false);
+      // Already handled by onAuthStateChanged
     }
   }, [currentUser, fetchGoals]);
   
+  // useEffect for showing the "No goals" toast
+  useEffect(() => {
+    if (!isLoading && currentUser && goals.length === 0 && !hasShownNoGoalsToast) {
+      toast({
+        title: "No Savings Goals",
+        description: "You haven't set any savings goals yet. Click 'Add New Goal' to start!",
+        variant: "default"
+      });
+      setHasShownNoGoalsToast(true); // Prevent toast from showing again until user/data changes
+    }
+  }, [isLoading, currentUser, goals, hasShownNoGoalsToast, toast]);
+
   const handleAddGoal = () => {
     toast({
         title: "Feature Coming Soon!",
@@ -105,10 +117,11 @@ export default function GoalsSection() {
     //     savedAmount: 1500,
     //     iconName: 'Plane',
     //     // createdAt will be set by serverTimestamp in addGoal service
-    //   } as Omit<FirestoreGoal, 'id' | 'createdAt'>) // Type assertion needed here
+    //   } as Omit<FirestoreGoal, 'id' | 'createdAt'>) 
     //   .then(() => {
     //       toast({ title: "Sample Goal Added", description: "Refreshing list..."});
-    //       fetchGoals(currentUser.uid);
+    //       if (currentUser) fetchGoals(currentUser.uid); // Re-fetch after adding
+    //       setHasShownNoGoalsToast(false); // Allow toast to re-evaluate if list becomes empty again
     //   })
     //   .catch(err => {
     //       toast({ title: "Error Adding Sample Goal", description: err.message, variant: "destructive"});
@@ -126,7 +139,7 @@ export default function GoalsSection() {
         </div>
       </CardHeader>
       <CardContent>
-        {isLoading && !goals.length ? ( // Show loader only if truly loading and no goals yet
+        {isLoading ? ( 
           <div className="flex items-center justify-center h-[200px]">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="ml-2">Loading goals...</p>
@@ -142,7 +155,8 @@ export default function GoalsSection() {
                 <GoalProgressItemCard key={goal.id} goal={goal} />
                 ))
             ) : (
-                !isLoading && <p className="text-center text-muted-foreground py-4">No goals set yet. Click below to add one!</p>
+                // Message handled by toast, or can add a static message here if preferred
+                <p className="text-center text-muted-foreground py-4">No goals set yet. Click below to add one!</p>
             )}
             <div onClick={handleAddGoal} className="cursor-pointer">
                 <AddGoalCard />

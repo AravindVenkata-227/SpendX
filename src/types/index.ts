@@ -59,3 +59,10 @@ export interface UserProfile {
   createdAt: Timestamp;
   // Add other profile fields here if needed, e.g., notificationPreferences
 }
+
+// Represents the summary of monthly financial data
+export interface MonthlySummary {
+  totalIncome: number;
+  totalExpenses: number;
+  netSavings: number;
+}

@@ -1,3 +1,7 @@
+
+"use client";
+
+import { useState, useEffect } from 'react';
 import Header from '@/components/layout/header';
 import SummarySection from '@/components/dashboard/summary-section';
 import ChartsSection from '@/components/dashboard/charts-section';
@@ -5,6 +9,12 @@ import GoalsSection from '@/components/dashboard/goals-section';
 import TransactionsSection from '@/components/dashboard/transactions-section';
 
 export default function DashboardPage() {
+  const [currentYear, setCurrentYear] = useState<number | null>(null);
+
+  useEffect(() => {
+    setCurrentYear(new Date().getFullYear());
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <Header />
@@ -22,7 +32,7 @@ export default function DashboardPage() {
       </main>
       <footer className="py-6 px-4 md:px-6 border-t">
         <p className="text-center text-sm text-muted-foreground">
-          © {new Date().getFullYear()} FinTrack AI. All rights reserved.
+          {currentYear !== null ? `© ${currentYear} FinTrack AI. All rights reserved.` : '© FinTrack AI. All rights reserved.'}
         </p>
       </footer>
     </div>

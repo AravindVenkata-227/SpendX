@@ -10,14 +10,15 @@ export interface TransactionFirestore {
   date: string; // Should be in YYYY-MM-DD format or ISO string for querying/sorting
   description: string;
   category: string;
-  amount: number;
+  amount: number; // Positive for credit, negative for debit
   type: 'debit' | 'credit';
   iconName: string; // e.g., "Utensils", "FileText" - maps to LucideIcon on client
 }
 
 // Represents a transaction for UI display (includes the actual icon component)
-export interface Transaction extends Omit<TransactionFirestore, 'iconName' | 'id' | 'userId'> {
+export interface Transaction extends Omit<TransactionFirestore, 'iconName' | 'id' | 'userId' | 'accountId'> {
   id: string; // Ensure id is always present for UI keys
+  accountId: string;
   icon: LucideIcon;
 }
 
@@ -32,8 +33,9 @@ export interface Goal {
 }
 
 // Goal type for UI display
-export interface UIGoal extends Omit<Goal, 'iconName'> {
+export interface UIGoal extends Omit<Goal, 'iconName' | 'createdAt'> {
   icon: LucideIcon;
+  createdAt: string; // Or Date, depending on how you want to format
 }
 
 
@@ -68,11 +70,14 @@ export interface MonthlySummary {
 }
 
 // Represents a financial account as stored in Firestore
+export const AccountTypes = ["Savings", "Checking", "Credit Card", "Investment", "Loan", "Other"] as const;
+export type AccountType = typeof AccountTypes[number];
+
 export interface Account {
   id: string;
   userId: string;
   name: string; // e.g., "Primary Savings", "Salary Account"
-  type: string; // e.g., "Savings", "Checking", "Credit Card"
+  type: AccountType; 
   iconName: string; // Name of the Lucide icon
   // balance?: number; // Optional: Current balance, can be complex to maintain
   createdAt: Timestamp;
@@ -82,3 +87,10 @@ export interface Account {
 export interface UIAccount extends Omit<Account, 'iconName' | 'createdAt'> {
   icon: LucideIcon;
 }
+
+// For Add Transaction Dialog
+export const TransactionCategories = [
+  "Food", "Groceries", "Bills", "Utilities", "Rent/Mortgage", "Transport", "Shopping", 
+  "Entertainment", "Health", "Education", "Income", "Investment", "Travel", "Gifts", "Other"
+] as const;
+export type TransactionCategory = typeof TransactionCategories[number];

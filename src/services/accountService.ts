@@ -1,11 +1,11 @@
 
 import { db } from '@/lib/firebase';
-import type { Account } from '@/types';
+import type { Account, AccountType } from '@/types';
 import { collection, addDoc, getDocs, query, where, orderBy, serverTimestamp, Timestamp } from 'firebase/firestore';
 
 /**
  * Adds a new account to Firestore for the authenticated user.
- * @param accountData - The data for the account to add. Must include `userId`.
+ * @param accountData - The data for the account to add. Must include `userId`, `name`, `type`, and `iconName`.
  * @returns The ID of the newly added account.
  */
 export async function addAccount(accountData: Omit<Account, 'id' | 'createdAt'>): Promise<string> {
@@ -13,9 +13,12 @@ export async function addAccount(accountData: Omit<Account, 'id' | 'createdAt'>)
     console.error("Error adding account: userId is missing.");
     throw new Error("User ID is required to add an account.");
   }
+  if (!accountData.name || !accountData.type || !accountData.iconName) {
+     console.error("Error adding account: name, type, or iconName is missing.");
+    throw new Error("Account name, type, and icon name are required.");
+  }
+
   try {
-    // For now, this function is a placeholder. In a full implementation,
-    // you'd take more details (name, type) from user input.
     const docRef = await addDoc(collection(db, 'accounts'), {
       ...accountData,
       createdAt: serverTimestamp(),
@@ -24,7 +27,7 @@ export async function addAccount(accountData: Omit<Account, 'id' | 'createdAt'>)
     return docRef.id;
   } catch (e) {
     console.error("Error adding account: ", e);
-    throw new Error("Could not add account.");
+    throw new Error("Could not add account. Please check server logs.");
   }
 }
 
@@ -53,10 +56,10 @@ export async function getAccountsByUserId(userId: string): Promise<Account[]> {
         id: doc.id,
         userId: data.userId,
         name: data.name,
-        type: data.type,
+        type: data.type as AccountType,
         iconName: data.iconName,
         createdAt: data.createdAt as Timestamp,
-      } as Account);
+      } as Account); // Ensure correct casting
     });
     return accounts;
   } catch (e: any) {
@@ -66,6 +69,8 @@ export async function getAccountsByUserId(userId: string): Promise<Account[]> {
         detailedMessage = "Permission denied fetching accounts. Ensure Firestore rules are deployed and allow access, and that account documents have the correct 'userId' matching the authenticated user.";
     } else if (e.message && (e.message.includes('index') || e.message.includes('Index'))) {
         detailedMessage = "Missing or insufficient Firestore index for fetching accounts. Check Firestore logs for details and a link to create it.";
+    } else if (e.message) {
+        detailedMessage = e.message;
     }
     throw new Error(detailedMessage);
   }

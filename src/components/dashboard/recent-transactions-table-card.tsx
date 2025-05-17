@@ -1,8 +1,9 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
-import type { Transaction as TransactionType } from "@/types";
+import { useState, useEffect, useCallback } from 'react';
+import type { Transaction as UITransactionType, TransactionFirestore } from "@/types";
+import { getTransactionsByAccountId, addTransaction } from '@/services/transactionService'; // Import service
 import {
   Card,
   CardContent,
@@ -18,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from '@/components/ui/button';
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,8 +38,10 @@ import {
   ShoppingBag,
   Home,
   Car,
-  PiggyBank, // For a potential new category or just variety
-  Landmark, // For bank/account related things
+  PiggyBank,
+  Landmark,
+  Loader2, // For loading state
+  PlusCircle, // For add transaction button
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -53,27 +57,6 @@ const MOCK_ACCOUNTS: BankAccount[] = [
   { id: 'acc3', name: 'Salary Account (ZZZZ9012)', icon: Landmark },
 ];
 
-const ALL_MOCK_TRANSACTIONS: { [accountId: string]: TransactionType[] } = {
-  acc1: [
-    { id: '1', date: '2024-07-28', description: 'Supermarket Haul', category: 'Food', amount: -550.75, type: 'debit', icon: Utensils },
-    { id: '2', date: '2024-07-27', description: 'Monthly Salary (Partial)', category: 'Income', amount: 25000, type: 'credit', icon: Briefcase },
-    { id: '3', date: '2024-07-26', description: 'Electricity Provider Inc.', category: 'Bills', amount: -1200, type: 'debit', icon: FileText },
-    { id: '4', date: '2024-07-25', description: 'Dinner at The Local Joint', category: 'Food', amount: -850, type: 'debit', icon: Utensils },
-  ],
-  acc2: [
-    { id: '101', date: '2024-07-29', description: 'Rent Payment', category: 'Housing', amount: -20000, type: 'debit', icon: Home },
-    { id: '102', date: '2024-07-28', description: 'Investment Dividend', category: 'Income', amount: 1200, type: 'credit', icon: Briefcase },
-    { id: '103', date: '2024-07-27', description: 'Fuel for Car', category: 'Transport', amount: -3000, type: 'debit', icon: Car },
-    { id: '104', date: '2024-07-26', description: 'Weekend Getaway Booking', category: 'Travel', amount: -8500, type: 'debit', icon: Plane },
-  ],
-  acc3: [
-    { id: '201', date: '2024-07-30', description: 'Main Salary Credit', category: 'Income', amount: 75000, type: 'credit', icon: Briefcase },
-    { id: '202', date: '2024-07-29', description: 'Online Course Subscription', category: 'Education', amount: -2500, type: 'debit', icon: BookOpen },
-    { id: '203', date: '2024-07-28', description: 'New Headphones', category: 'Shopping', amount: -6000, type: 'debit', icon: ShoppingBag },
-    { id: '204', date: '2024-07-27', description: 'Movie Tickets', category: 'Entertainment', amount: -750, type: 'debit', icon: Film },
-  ],
-};
-
 const categoryIcons: { [key: string]: React.ElementType } = {
   Food: Utensils,
   Bills: FileText,
@@ -84,39 +67,90 @@ const categoryIcons: { [key: string]: React.ElementType } = {
   Education: BookOpen,
   Housing: Home,
   Travel: Plane,
+  Default: FileText, // Fallback icon
 };
 
-interface ClientFormattedTransaction extends TransactionType {
-  formattedDate: string;
-}
+// Helper function to map Firestore transaction to UI transaction
+const mapFirestoreTransactionToUI = (transaction: TransactionFirestore): UITransactionType => {
+  const IconComponent = categoryIcons[transaction.category] || transaction.iconName && categoryIcons[transaction.iconName] || categoryIcons.Default;
+  return {
+    ...transaction,
+    id: transaction.id!,
+    icon: IconComponent,
+    // Ensure date is formatted for UI if needed, here assuming it's already YYYY-MM-DD string
+  };
+};
+
 
 export default function RecentTransactionsTableCard() {
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>(MOCK_ACCOUNTS[0]?.id);
-  const [clientTransactions, setClientTransactions] = useState<ClientFormattedTransaction[]>([]);
+  const [transactions, setTransactions] = useState<UITransactionType[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (!selectedAccountId || !ALL_MOCK_TRANSACTIONS[selectedAccountId]) {
-      setClientTransactions([]);
+  const fetchTransactions = useCallback(async (accountId: string | undefined) => {
+    if (!accountId) {
+      setTransactions([]);
       return;
     }
-    const rawTransactions = ALL_MOCK_TRANSACTIONS[selectedAccountId];
-    const formatted = rawTransactions.map(t => ({
-      ...t,
-      formattedDate: new Date(t.date).toLocaleDateString()
-    }));
-    setClientTransactions(formatted);
+    setIsLoading(true);
+    try {
+      const firestoreTransactions = await getTransactionsByAccountId(accountId);
+      const uiTransactions = firestoreTransactions.map(mapFirestoreTransactionToUI);
+      setTransactions(uiTransactions);
+      const selectedAccountName = MOCK_ACCOUNTS.find(acc => acc.id === accountId)?.name || 'Selected Account';
+      toast({
+        title: "Transactions Loaded",
+        description: `Displaying transactions for ${selectedAccountName}.`,
+      });
+    } catch (error) {
+      console.error("Failed to fetch transactions:", error);
+      toast({
+        title: "Error",
+        description: "Could not fetch transactions from the database.",
+        variant: "destructive",
+      });
+      setTransactions([]); // Clear transactions on error
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
-    const selectedAccountName = MOCK_ACCOUNTS.find(acc => acc.id === selectedAccountId)?.name || 'Selected Account';
-    toast({
-      title: "Account Switched",
-      description: `Displaying transactions for ${selectedAccountName}.`,
-    });
-  }, [selectedAccountId, toast]);
+  useEffect(() => {
+    fetchTransactions(selectedAccountId);
+  }, [selectedAccountId, fetchTransactions]);
 
   const handleAccountChange = (accountId: string) => {
     setSelectedAccountId(accountId);
   };
+
+  // Mock function to add a sample transaction - for testing "Storing"
+  const handleAddSampleTransaction = async () => {
+    if (!selectedAccountId) {
+      toast({ title: "No Account Selected", description: "Please select an account first.", variant: "destructive" });
+      return;
+    }
+    const newTransactionData: Omit<TransactionFirestore, 'id'> = {
+      accountId: selectedAccountId,
+      date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD
+      description: "Sample Online Purchase",
+      category: "Shopping",
+      amount: -(Math.floor(Math.random() * 200) + 50), // Random amount between 50-250
+      type: "debit",
+      iconName: "ShoppingCart",
+    };
+    try {
+      setIsLoading(true); // Show loader while adding
+      await addTransaction(newTransactionData);
+      toast({ title: "Transaction Added", description: "Sample transaction successfully added to Firestore." });
+      await fetchTransactions(selectedAccountId); // Refresh the list
+    } catch (error) {
+      toast({ title: "Error Adding Transaction", description: "Could not add sample transaction.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   return (
     <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -126,7 +160,7 @@ export default function RecentTransactionsTableCard() {
             <History className="h-6 w-6 text-primary" />
             <CardTitle>Recent Transactions</CardTitle>
           </div>
-          <div className="w-full sm:w-auto">
+          <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2 items-center">
             <Select onValueChange={handleAccountChange} defaultValue={selectedAccountId}>
               <SelectTrigger className="w-full sm:w-[280px]">
                 <SelectValue placeholder="Select an account" />
@@ -142,64 +176,75 @@ export default function RecentTransactionsTableCard() {
                 ))}
               </SelectContent>
             </Select>
+            <Button onClick={handleAddSampleTransaction} variant="outline" className="w-full sm:w-auto">
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Sample Tx
+            </Button>
           </div>
         </div>
         <CardDescription className="mt-2">
-          Your latest financial activities for the selected account.
+          Your latest financial activities for the selected account (from Firestore).
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <ScrollArea className="h-[300px]">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[100px]">Type</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {clientTransactions.length === 0 && selectedAccountId && (
+        {isLoading ? (
+          <div className="flex items-center justify-center h-[200px]">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="ml-2">Loading transactions...</p>
+          </div>
+        ) : (
+          <ScrollArea className="h-[300px]">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    No transactions found for this account.
-                  </TableCell>
+                  <TableHead className="w-[80px]">Type</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead className="w-[100px]">Date</TableHead>
+                  <TableHead className="text-right w-[120px]">Amount</TableHead>
                 </TableRow>
-              )}
-              {clientTransactions.map((transaction) => {
-                const Icon = transaction.icon || categoryIcons[transaction.category] || FileText;
-                return (
-                <TableRow key={transaction.id}>
-                  <TableCell>
-                    {transaction.type === 'debit' ? (
-                      <ArrowDownCircle className="h-5 w-5 text-red-500" />
-                    ) : (
-                      <ArrowUpCircle className="h-5 w-5 text-green-500" />
-                    )}
-                  </TableCell>
-                  <TableCell className="font-medium flex items-center gap-2">
-                     <Icon className="h-4 w-4 text-muted-foreground hidden sm:inline-block" />
-                    {transaction.description}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{transaction.category}</Badge>
-                  </TableCell>
-                  <TableCell>{transaction.formattedDate}</TableCell>
-                  <TableCell
-                    className={cn(
-                      "text-right font-semibold",
-                      transaction.type === 'debit' ? 'text-red-600' : 'text-green-600'
-                    )}
-                  >
-                    {transaction.type === 'debit' ? '-' : '+'}₹{Math.abs(transaction.amount).toLocaleString()}
-                  </TableCell>
-                </TableRow>
-              )})}
-            </TableBody>
-          </Table>
-        </ScrollArea>
+              </TableHeader>
+              <TableBody>
+                {transactions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground h-24">
+                      No transactions found for this account, or add some using the button above.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  transactions.map((transaction) => {
+                    const Icon = transaction.icon; // Already mapped
+                    return (
+                    <TableRow key={transaction.id}>
+                      <TableCell>
+                        {transaction.type === 'debit' ? (
+                          <ArrowDownCircle className="h-5 w-5 text-red-500" />
+                        ) : (
+                          <ArrowUpCircle className="h-5 w-5 text-green-500" />
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium flex items-center gap-2">
+                        <Icon className="h-4 w-4 text-muted-foreground hidden sm:inline-block" />
+                        {transaction.description}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{transaction.category}</Badge>
+                      </TableCell>
+                      <TableCell>{new Date(transaction.date).toLocaleDateString()}</TableCell>
+                      <TableCell
+                        className={cn(
+                          "text-right font-semibold",
+                          transaction.type === 'debit' ? 'text-red-600' : 'text-green-600'
+                        )}
+                      >
+                        {transaction.type === 'debit' ? '-' : '+'}₹{Math.abs(transaction.amount).toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  )})
+                )}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        )}
       </CardContent>
     </Card>
   );

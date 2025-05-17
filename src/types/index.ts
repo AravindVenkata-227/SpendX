@@ -1,13 +1,21 @@
 import type { LucideIcon } from 'lucide-react';
 
-export interface Transaction {
-  id: string;
-  date: string;
+// Represents a transaction as stored in Firestore
+export interface TransactionFirestore {
+  id?: string; // Firestore will generate if not provided on add
+  accountId: string;
+  date: string; // Should be in YYYY-MM-DD format or ISO string for querying/sorting
   description: string;
   category: string;
   amount: number;
   type: 'debit' | 'credit';
-  icon?: LucideIcon; 
+  iconName: string; // e.g., "Utensils", "FileText" - maps to LucideIcon on client
+}
+
+// Represents a transaction for UI display (includes the actual icon component)
+export interface Transaction extends Omit<TransactionFirestore, 'iconName' | 'id'> {
+  id: string; // Ensure id is always present for UI keys
+  icon: LucideIcon;
 }
 
 export interface Goal {

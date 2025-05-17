@@ -10,9 +10,10 @@ import SummarySection from '@/components/dashboard/summary-section';
 import ChartsSection from '@/components/dashboard/charts-section';
 import GoalsSection from '@/components/dashboard/goals-section';
 import TransactionsSection from '@/components/dashboard/transactions-section';
-import FinancialInsightsCard from '@/components/dashboard/financial-insights-card';
-import InvestmentIdeasCard from '@/components/dashboard/investment-ideas-card'; 
+import InvestmentIdeasCard from '@/components/dashboard/investment-ideas-card';
+import FinancialHealthAdviceCard from '@/components/dashboard/financial-health-advice-card'; // New card
 import { Loader2 } from 'lucide-react';
+import { cn } from "@/lib/utils";
 
 const INVESTMENT_CARD_VISIBLE_KEY = 'feature_showInvestmentIdeasCard';
 
@@ -20,7 +21,7 @@ export default function DashboardPage() {
   const [currentYear, setCurrentYear] = useState<number | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0); // Key to trigger data refresh in child components
+  const [refreshKey, setRefreshKey] = useState(0); 
   const [isInvestmentCardVisible, setIsInvestmentCardVisible] = useState(false);
   const router = useRouter();
 
@@ -47,7 +48,7 @@ export default function DashboardPage() {
         setCurrentUser(user);
       } else {
         setCurrentUser(null);
-        router.push('/login'); // Redirect to login if not authenticated
+        router.push('/login'); 
       }
       setIsLoadingAuth(false);
     });
@@ -66,7 +67,7 @@ export default function DashboardPage() {
       </div>
     );
   }
-  
+
   if (!currentUser) {
      return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
@@ -82,9 +83,12 @@ export default function DashboardPage() {
       <Header />
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6">
         <SummarySection refreshTrigger={refreshKey} />
-        
-        <div className={`grid grid-cols-1 ${isInvestmentCardVisible ? 'md:grid-cols-2' : 'md:grid-cols-1'} gap-6`}>
-          <FinancialInsightsCard />
+
+        <div className={cn(
+            "grid grid-cols-1 gap-6",
+            isInvestmentCardVisible ? "md:grid-cols-2" : "md:grid-cols-1" // Adjust columns based on investment card visibility
+          )}>
+          <FinancialHealthAdviceCard /> 
           {isInvestmentCardVisible && <InvestmentIdeasCard />}
         </div>
 

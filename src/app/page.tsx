@@ -83,7 +83,7 @@ export default function DashboardPage() {
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6">
         <SummarySection refreshTrigger={refreshKey} />
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className={`grid grid-cols-1 ${isInvestmentCardVisible ? 'md:grid-cols-2' : 'md:grid-cols-1'} gap-6`}>
           <FinancialInsightsCard />
           {isInvestmentCardVisible && <InvestmentIdeasCard />}
         </div>

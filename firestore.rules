@@ -4,31 +4,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users:
-    // - Authenticated users can create their own profile (doc ID must match their UID).
-    // - Authenticated users can read and update their own profile.
-    // - No one can list all users or delete profiles through client SDKs.
-    match /users/{userId} {
-      allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.id == userId;
-      allow read, update: if request.auth != null && request.auth.uid == userId;
-      allow delete: if false; // Typically admin only, or implement specific conditions
-      allow list: if false;   // Prevent listing all users
-    }
-
-    // Transactions:
-    // - Authenticated users can create transactions for themselves (request.resource.data.userId must match their UID).
-    // - Authenticated users can read, update, delete their own transactions.
+    // Transactions - users can only read/write their own
     match /transactions/{transactionId} {
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
     }
 
-    // Goals:
-    // - Authenticated users can create goals for themselves (request.resource.data.userId must match their UID).
-    // - Authenticated users can read, update, delete their own goals.
+    // Goals - users can only read/write their own
     match /goals/{goalId} {
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
+
+    // User profiles - users can create their own profile, read their own, update their own
+    match /users/{userId} {
+      allow read, update: if request.auth != null && request.auth.uid == userId; // userId here is the document ID
+      allow create: if request.auth != null && request.auth.uid == userId;     // userId here is the document ID
     }
   }
 }

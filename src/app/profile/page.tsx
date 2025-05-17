@@ -10,7 +10,7 @@ import { getUserProfile, type UserProfile } from '@/services/userService';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Mail, User as UserIcon, ArrowLeft, Loader2, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Mail, User as UserIcon, ArrowLeft, Loader2, AlertTriangle, CalendarDays } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function ProfilePage() {
@@ -49,10 +49,11 @@ export default function ProfilePage() {
     if (userProfile?.createdAt) {
       // Format date client-side to avoid hydration issues
       setFormattedJoinedDate(new Date(userProfile.createdAt.seconds * 1000).toLocaleDateString());
-    } else {
+    } else if (currentUser && !userProfile && !isLoading) {
+      // If auth user exists but no firestore profile, and not loading
       setFormattedJoinedDate('Not available');
     }
-  }, [userProfile]);
+  }, [userProfile, currentUser, isLoading]);
 
   const getInitials = (name?: string | null, email?: string | null) => {
     if (name) {
@@ -76,6 +77,8 @@ export default function ProfilePage() {
   }
 
   if (!currentUser) {
+    // This case should ideally be caught by the onAuthStateChanged redirect,
+    // but it's a good fallback during the brief period before redirection.
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -92,7 +95,7 @@ export default function ProfilePage() {
             <AvatarImage 
               src={currentUser ? `https://placehold.co/96x96.png?text=${getInitials(userProfile?.fullName, currentUser.email)}` : "https://placehold.co/96x96.png"} 
               alt="User Avatar" 
-              data-ai-hint="user avatar large" 
+              data-ai-hint="user avatar large"
             />
             <AvatarFallback className="text-3xl">
               {getInitials(userProfile?.fullName, currentUser?.email)}
@@ -120,15 +123,9 @@ export default function ProfilePage() {
                 </Label>
                 <p className="text-lg p-3 bg-muted rounded-md shadow-sm">{userProfile.email}</p>
               </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-muted-foreground flex items-center">
-                  <ShieldAlert className="mr-2 h-4 w-4" /> Account UID
-                </Label>
-                <p className="text-sm p-3 bg-muted rounded-md shadow-sm text-muted-foreground break-all">{currentUser.uid}</p>
-              </div>
                <div className="space-y-2">
                 <Label className="text-sm font-medium text-muted-foreground flex items-center">
-                  <UserIcon className="mr-2 h-4 w-4" /> Joined On
+                  <CalendarDays className="mr-2 h-4 w-4" /> Joined On
                 </Label>
                 <p className="text-lg p-3 bg-muted rounded-md shadow-sm">
                   {formattedJoinedDate || <Loader2 className="h-4 w-4 animate-spin inline-block" />}
@@ -143,12 +140,17 @@ export default function ProfilePage() {
               <AlertTriangle className="h-10 w-10 text-destructive mx-auto mb-3" />
               <p className="font-semibold">Profile Information Not Available</p>
               <p className="text-xs mt-1">
-                We couldn't load your detailed profile from our records (e.g., Full Name, Joined Date).
+                We couldn't load your detailed profile information (e.g., Full Name, Joined Date) from our records.
               </p>
               {currentUser?.email && (
-                <p className="text-xs mt-2">Your registered email is: <span className="font-semibold">{currentUser.email}</span></p>
+                <div className="mt-4 space-y-2">
+                  <Label className="text-sm font-medium text-muted-foreground flex items-center justify-center">
+                    <Mail className="mr-2 h-4 w-4" /> Registered Email Address
+                  </Label>
+                  <p className="text-lg p-3 bg-muted rounded-md shadow-sm">{currentUser.email}</p>
+                </div>
               )}
-               <p className="text-xs mt-1">
+               <p className="text-xs mt-3">
                 If you just signed up, it might take a moment for the full profile to be created. Otherwise, please contact support if this persists.
               </p>
             </div>
@@ -170,5 +172,6 @@ export default function ProfilePage() {
   );
 }
 
+// Re-export Label to ensure it's correctly picked up if there are multiple Label definitions in scope.
 import { Label as ShadLabel } from "@/components/ui/label";
 const Label = ShadLabel;

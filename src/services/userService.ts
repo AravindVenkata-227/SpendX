@@ -27,7 +27,10 @@ export async function createUserProfile(userId: string, fullName: string, email:
     console.log("User profile created/updated for ID: ", userId);
   } catch (e: any) {
     console.error("Error creating/updating user profile: ", e);
-    throw new Error("Could not create/update user profile.");
+    if (e.code === 'permission-denied') {
+      throw new Error("Permission denied when creating user profile. Please check Firestore security rules and ensure they are deployed.");
+    }
+    throw new Error(e.message || "Could not create/update user profile. Check server logs for details.");
   }
 }
 
@@ -85,7 +88,7 @@ export async function updateUserProfile(userId: string, data: UserProfileUpdateD
     console.error("Error updating user profile: ", e);
     // Provide more specific error feedback if possible
     if (e.code === 'permission-denied') {
-        throw new Error("Permission denied. You may not have the rights to update this profile, or some fields are restricted.");
+        throw new Error("Permission denied. You may not have the rights to update this profile, or some fields are restricted by Firestore rules.");
     }
     throw new Error("Could not update user profile. Please check server logs.");
   }

@@ -4,34 +4,40 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Rules for the 'users' collection
+    // Users collection:
+    // - Allow users to create their own profile (document ID must match their UID)
+    // - Allow users to read and update their own profile
+    // - Disallow deleting profiles for now (can be enabled if needed)
+    // - Disallow listing all users
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      // For creating a profile:
-      // 1. User must be authenticated.
-      // 2. The UID of the authenticated user must match the document ID (userId in the path).
-      // 3. The 'id' field within the data being written must also match the authenticated user's UID.
-      allow create: if request.auth != null &&
-                       request.auth.uid == userId &&
-                       request.resource.data.id == request.auth.uid;
-      allow update: if request.auth != null && request.auth.uid == userId; // User can update their own profile
-      allow delete: if false; // Generally, don't allow users to delete their profiles directly
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId && request.auth.uid == request.resource.data.id;
     }
 
-    // Rules for the 'transactions' collection
+    // Transactions collection:
+    // - Users can only read/write their own transactions.
+    // - The 'userId' field in the transaction document must match the authenticated user's UID.
     match /transactions/{transactionId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      // Ensure users can only operate on their own transactions.
-      // 'userId' field must exist in the transaction document.
+      // For update, ensure user owns the doc and isn't changing the userId to someone else's
+      allow update: if request.auth != null && 
+                      request.auth.uid == resource.data.userId && 
+                      request.auth.uid == request.resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
 
-    // Rules for the 'goals' collection
+    // Goals collection:
+    // - Users can only read/write their own goals.
+    // - The 'userId' field in the goal document must match the authenticated user's UID.
     match /goals/{goalId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      // Ensure users can only operate on their own goals.
-      // 'userId' field must exist in the goal document.
+      // For update, ensure user owns the doc and isn't changing the userId to someone else's
+      allow update: if request.auth != null && 
+                      request.auth.uid == resource.data.userId &&
+                      request.auth.uid == request.resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
   }
 }

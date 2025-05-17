@@ -17,6 +17,7 @@ export default function ProfilePage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [formattedJoinedDate, setFormattedJoinedDate] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -28,23 +29,30 @@ export default function ProfilePage() {
           const profile = await getUserProfile(user.uid);
           setUserProfile(profile);
         } catch (error: any) {
-          // This catch is unlikely to be hit if getUserProfile handles its own errors and returns null.
-          // However, keeping it for safety.
           console.error("Error fetching user profile in ProfilePage:", error);
           toast({
             title: "Error",
             description: "Could not load your profile information due to an unexpected error.",
             variant: "destructive",
           });
-          setUserProfile(null); // Ensure profile is null on error
+          setUserProfile(null);
         }
       } else {
-        router.push('/login'); // Redirect if not authenticated
+        router.push('/login'); 
       }
       setIsLoading(false);
     });
     return () => unsubscribe();
   }, [router, toast]);
+
+  useEffect(() => {
+    if (userProfile?.createdAt) {
+      // Format date client-side to avoid hydration issues
+      setFormattedJoinedDate(new Date(userProfile.createdAt.seconds * 1000).toLocaleDateString());
+    } else {
+      setFormattedJoinedDate('Not available');
+    }
+  }, [userProfile]);
 
   const getInitials = (name?: string | null, email?: string | null) => {
     if (name) {
@@ -68,7 +76,6 @@ export default function ProfilePage() {
   }
 
   if (!currentUser) {
-    // This state should ideally be brief due to the redirect in useEffect
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -124,25 +131,25 @@ export default function ProfilePage() {
                   <UserIcon className="mr-2 h-4 w-4" /> Joined On
                 </Label>
                 <p className="text-lg p-3 bg-muted rounded-md shadow-sm">
-                  {userProfile.createdAt ? new Date(userProfile.createdAt.seconds * 1000).toLocaleDateString() : 'Not available'}
+                  {formattedJoinedDate || <Loader2 className="h-4 w-4 animate-spin inline-block" />}
                 </p>
               </div>
-              {/* Placeholder for edit button - to be implemented next */}
               <Button variant="outline" className="w-full mt-6" disabled>
                 Edit Profile (Coming Soon)
               </Button>
             </>
           ) : (
-            // This block is shown if isLoading (page-level) is false, currentUser exists, but userProfile is null.
             <div className="text-center text-muted-foreground py-8">
               <AlertTriangle className="h-10 w-10 text-destructive mx-auto mb-3" />
               <p className="font-semibold">Profile Information Not Available</p>
               <p className="text-xs mt-1">
-                We couldn't load your detailed profile. This might be because it hasn't been created yet, 
-                or there was an issue during retrieval.
+                We couldn't load your detailed profile from our records (e.g., Full Name, Joined Date).
               </p>
+              {currentUser?.email && (
+                <p className="text-xs mt-2">Your registered email is: <span className="font-semibold">{currentUser.email}</span></p>
+              )}
                <p className="text-xs mt-1">
-                If you just signed up, it might take a moment. Otherwise, please contact support if this persists.
+                If you just signed up, it might take a moment for the full profile to be created. Otherwise, please contact support if this persists.
               </p>
             </div>
           )}
@@ -163,6 +170,5 @@ export default function ProfilePage() {
   );
 }
 
-// Re-export Label for use within this page component if not globally available via form
 import { Label as ShadLabel } from "@/components/ui/label";
 const Label = ShadLabel;

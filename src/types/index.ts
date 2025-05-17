@@ -82,6 +82,14 @@ export interface UserProfile {
   photoURL?: string | null;
 }
 
+// Data for updating a user profile, restricted to allowed fields
+export type UserProfileUpdateData = {
+  fullName?: string;
+  // Add other updatable fields here, e.g., notificationPreferences
+  // photoURL will be handled separately if we implement direct upload
+};
+
+
 // Represents the summary of monthly financial data
 export interface MonthlySummary {
   totalIncome: number;
@@ -121,4 +129,3 @@ export type TransactionCategory = typeof TransactionCategories[number];
 
 // Data for updating a goal, excluding non-updatable fields
 export type GoalUpdateData = Partial<Omit<Goal, 'id' | 'userId' | 'createdAt'>>;
-

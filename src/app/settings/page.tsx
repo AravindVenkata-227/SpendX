@@ -12,9 +12,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { ChevronLeft, UserCircle, Bell, Palette, Loader2, Sun, Moon, Laptop } from 'lucide-react';
+import { ChevronLeft, UserCircle, Bell, Palette, Loader2, Sun, Moon, Laptop, Sparkles } from 'lucide-react';
 
 type Theme = "light" | "dark" | "system";
+const INVESTMENT_CARD_VISIBLE_KEY = 'feature_showInvestmentIdeasCard';
 
 export default function SettingsPage() {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
@@ -26,6 +27,19 @@ export default function SettingsPage() {
   const [pushNotifications, setPushNotifications] = useState(false);
   
   const [currentTheme, setCurrentTheme] = useState<Theme>("system");
+  const [showInvestmentCard, setShowInvestmentCard] = useState(false);
+
+  useEffect(() => {
+    const savedVisibility = localStorage.getItem(INVESTMENT_CARD_VISIBLE_KEY);
+    setShowInvestmentCard(savedVisibility === 'true');
+  }, []);
+
+  const handleInvestmentCardToggle = (checked: boolean) => {
+    setShowInvestmentCard(checked);
+    localStorage.setItem(INVESTMENT_CARD_VISIBLE_KEY, String(checked));
+    // Dispatch a storage event so other tabs/components can react if needed
+    window.dispatchEvent(new StorageEvent('storage', { key: INVESTMENT_CARD_VISIBLE_KEY, newValue: String(checked) }));
+  };
 
   const applyTheme = useCallback((theme: Theme) => {
     const root = window.document.documentElement;
@@ -203,6 +217,36 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
+          {/* Experimental Features Card */}
+          <Card className="shadow-lg">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <Sparkles className="h-6 w-6 text-primary" />
+                <CardTitle className="text-xl">Experimental Features</CardTitle>
+              </div>
+              <CardDescription>Enable or disable new and experimental features.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
+                <Label htmlFor="show-investment-card" className="flex flex-col space-y-1">
+                  <span>AI Investment Idea Generator</span>
+                  <span className="font-normal leading-snug text-muted-foreground">
+                    Show the AI-powered investment idea generator on the dashboard.
+                  </span>
+                  <span className="text-xs text-destructive font-semibold">
+                    FOR ILLUSTRATIVE AND EDUCATIONAL PURPOSES ONLY. NOT FINANCIAL ADVICE.
+                  </span>
+                </Label>
+                <Switch
+                  id="show-investment-card"
+                  checked={showInvestmentCard}
+                  onCheckedChange={handleInvestmentCardToggle}
+                  aria-label="Toggle AI Investment Idea Generator visibility"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
         </div>
       </main>
       <footer className="py-6 px-4 md:px-6 border-t mt-12">
@@ -213,4 +257,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-

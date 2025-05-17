@@ -11,15 +11,34 @@ import ChartsSection from '@/components/dashboard/charts-section';
 import GoalsSection from '@/components/dashboard/goals-section';
 import TransactionsSection from '@/components/dashboard/transactions-section';
 import FinancialInsightsCard from '@/components/dashboard/financial-insights-card';
-import InvestmentIdeasCard from '@/components/dashboard/investment-ideas-card'; // New card
+import InvestmentIdeasCard from '@/components/dashboard/investment-ideas-card'; 
 import { Loader2 } from 'lucide-react';
+
+const INVESTMENT_CARD_VISIBLE_KEY = 'feature_showInvestmentIdeasCard';
 
 export default function DashboardPage() {
   const [currentYear, setCurrentYear] = useState<number | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [refreshKey, setRefreshKey] = useState(0); // Key to trigger data refresh in child components
+  const [isInvestmentCardVisible, setIsInvestmentCardVisible] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const savedVisibility = localStorage.getItem(INVESTMENT_CARD_VISIBLE_KEY);
+    setIsInvestmentCardVisible(savedVisibility === 'true');
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === INVESTMENT_CARD_VISIBLE_KEY) {
+        setIsInvestmentCardVisible(event.newValue === 'true');
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   useEffect(() => {
     setCurrentYear(new Date().getFullYear());
@@ -66,7 +85,7 @@ export default function DashboardPage() {
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FinancialInsightsCard />
-          <InvestmentIdeasCard />
+          {isInvestmentCardVisible && <InvestmentIdeasCard />}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

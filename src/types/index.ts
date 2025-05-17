@@ -1,8 +1,10 @@
+
 import type { LucideIcon } from 'lucide-react';
 
 // Represents a transaction as stored in Firestore
 export interface TransactionFirestore {
   id?: string; // Firestore will generate if not provided on add
+  userId: string; // ID of the user who owns this transaction
   accountId: string;
   date: string; // Should be in YYYY-MM-DD format or ISO string for querying/sorting
   description: string;
@@ -13,7 +15,7 @@ export interface TransactionFirestore {
 }
 
 // Represents a transaction for UI display (includes the actual icon component)
-export interface Transaction extends Omit<TransactionFirestore, 'iconName' | 'id'> {
+export interface Transaction extends Omit<TransactionFirestore, 'iconName' | 'id' | 'userId'> {
   id: string; // Ensure id is always present for UI keys
   icon: LucideIcon;
 }
@@ -24,6 +26,8 @@ export interface Goal {
   targetAmount: number;
   savedAmount: number;
   icon: LucideIcon;
+  // Consider adding userId here too if goals are user-specific
+  // userId: string;
 }
 
 export interface SpendingCategory {
@@ -39,3 +43,4 @@ export interface ChartConfig {
     icon?: LucideIcon;
   };
 }
+

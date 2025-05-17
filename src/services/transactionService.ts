@@ -1,3 +1,4 @@
+
 'use server';
 import { db } from '@/lib/firebase';
 import type { TransactionFirestore } from '@/types';
@@ -6,19 +7,20 @@ import { collection, addDoc, getDocs, query, where, orderBy, Timestamp } from 'f
 /**
  * Adds a new transaction to Firestore.
  * @param transactionData - The data for the transaction to add.
+ *                          Must include `userId`.
  *                          The `date` should be a string in 'YYYY-MM-DD' format.
  *                          `iconName` should be the string name of a Lucide icon.
  * @returns The ID of the newly added transaction.
  */
 export async function addTransaction(transactionData: Omit<TransactionFirestore, 'id'>): Promise<string> {
+  if (!transactionData.userId) {
+    console.error("Error adding transaction: userId is missing.");
+    throw new Error("User ID is required to add a transaction.");
+  }
   try {
-    // Ensure date is a string; if it's a Date object, convert it.
-    // For Firestore, it's often better to store dates as Timestamps or ISO strings.
-    // Here, we assume YYYY-MM-DD string as per existing mock data.
     const docRef = await addDoc(collection(db, 'transactions'), {
       ...transactionData,
-      // If you prefer to store dates as Firestore Timestamps:
-      // date: Timestamp.fromDate(new Date(transactionData.date)), 
+      // date: Timestamp.fromDate(new Date(transactionData.date)), // Option to store as Timestamp
     });
     console.log("Transaction added with ID: ", docRef.id);
     return docRef.id;
@@ -29,21 +31,27 @@ export async function addTransaction(transactionData: Omit<TransactionFirestore,
 }
 
 /**
- * Fetches transactions for a specific account ID from Firestore, ordered by date descending.
+ * Fetches transactions for a specific account ID and user ID from Firestore, ordered by date descending.
  * @param accountId - The ID of the account to fetch transactions for.
+ * @param userId - The ID of the authenticated user.
  * @returns A promise that resolves to an array of transactions.
  */
-export async function getTransactionsByAccountId(accountId: string): Promise<TransactionFirestore[]> {
+export async function getTransactionsByAccountId(accountId: string, userId: string): Promise<TransactionFirestore[]> {
   if (!accountId) {
     console.warn("getTransactionsByAccountId called with no accountId");
+    return [];
+  }
+  if (!userId) {
+    console.warn("getTransactionsByAccountId called with no userId");
     return [];
   }
   try {
     const transactionsCol = collection(db, 'transactions');
     const q = query(
-      transactionsCol, 
+      transactionsCol,
       where('accountId', '==', accountId),
-      orderBy('date', 'desc') // Assumes date is stored in a sortable format (e.g., YYYY-MM-DD or ISO string)
+      where('userId', '==', userId), // Ensure user can only fetch their own transactions
+      orderBy('date', 'desc')
     );
     const querySnapshot = await getDocs(q);
     const transactions: TransactionFirestore[] = [];
@@ -51,8 +59,9 @@ export async function getTransactionsByAccountId(accountId: string): Promise<Tra
       const data = doc.data();
       transactions.push({
         id: doc.id,
+        userId: data.userId,
         accountId: data.accountId,
-        date: data.date, // If stored as Timestamp: data.date.toDate().toISOString().split('T')[0] for YYYY-MM-DD
+        date: data.date,
         description: data.description,
         category: data.category,
         amount: data.amount,
@@ -62,7 +71,10 @@ export async function getTransactionsByAccountId(accountId: string): Promise<Tra
     });
     return transactions;
   } catch (e) {
-    console.error(`Error fetching transactions for account ${accountId}: `, e);
-    throw new Error("Could not fetch transactions.");
+    console.error(`Error fetching transactions for account ${accountId}, user ${userId}: `, e);
+    // Check console for Firebase permission errors or missing index errors
+    // Firestore usually provides a link to create missing indexes if that's the issue.
+    throw new Error("Could not fetch transactions. Check server logs for details (e.g., Firestore permissions or missing indexes).");
   }
 }
+

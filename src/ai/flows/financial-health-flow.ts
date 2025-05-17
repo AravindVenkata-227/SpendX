@@ -1,9 +1,9 @@
 
 'use server';
 /**
- * @fileOverview Calculates a financial health score based on user's financial habits.
+ * @fileOverview Calculates a financial health score and provides improvement tips based on user's financial habits.
  *
- * - calculateFinancialHealth - A function that calculates the financial health score.
+ * - calculateFinancialHealth - A function that calculates the financial health score and tips.
  * - FinancialHealthInput - The input type for the calculateFinancialHealth function.
  * - FinancialHealthOutput - The return type for the calculateFinancialHealth function.
  */
@@ -30,6 +30,7 @@ const FinancialHealthOutputSchema = z.object({
   explanation: z
     .string()
     .describe('A brief explanation of the score, highlighting key positive or negative factors.'),
+  improvementTips: z.array(z.string()).describe('A list of 2-3 actionable, general tips to improve financial health based on the score and explanation.'),
 });
 export type FinancialHealthOutput = z.infer<typeof FinancialHealthOutputSchema>;
 
@@ -37,9 +38,12 @@ const calculateHealthScorePrompt = ai.definePrompt({
   name: 'calculateHealthScorePrompt',
   input: {schema: FinancialHealthInputSchema},
   output: {schema: FinancialHealthOutputSchema},
-  prompt: `You are an AI financial advisor. Based on the following summary of financial habits, calculate a financial health score from 0 to 100 (100 being excellent) and provide a concise, one or two-sentence explanation for the score.
+  prompt: `You are an AI financial advisor. Based on the following summary of financial habits, calculate a financial health score from 0 to 100 (100 being excellent).
+Provide:
+1. A concise, one or two-sentence 'explanation' for the score.
+2. A list of 2-3 actionable and general 'improvementTips' to improve financial health, tailored to the provided summary.
 
-Consider factors like income vs. expenses, savings rate, debt levels, and emergency fund status if mentioned. If not enough detail is provided for a robust score, provide a general score based on the information given and mention that more details would refine the score.
+Consider factors like income vs. expenses, savings rate, debt levels, and emergency fund status if mentioned. If not enough detail is provided for a robust score, provide a general score and tips based on the information given and mention that more details would refine the score and advice.
 
 Financial Summary:
 {{{financialSummary}}}
@@ -58,8 +62,7 @@ const financialHealthFlow = ai.defineFlow(
   },
   async (input) => {
     const {output} = await calculateHealthScorePrompt(input);
-    // Ensure a default score and explanation if the output is somehow null
-    // though the schema validation should prevent this.
-    return output || { score: 0, explanation: "Could not calculate score due to an unexpected error." };
+    // Ensure a default score, explanation, and tips if the output is somehow null
+    return output || { score: 0, explanation: "Could not calculate score due to an unexpected error.", improvementTips: ["Review spending habits.", "Consider creating a budget."] };
   }
 );

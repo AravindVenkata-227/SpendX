@@ -1,6 +1,7 @@
 
 import type { LucideIcon } from 'lucide-react';
 import type { Timestamp } from 'firebase/firestore';
+import { Plane, Home, Car, Smartphone, BookOpen, ShoppingBag, ShieldCheck, Gift, Target } from 'lucide-react';
 
 // Represents a transaction as stored in Firestore
 export interface TransactionFirestore {
@@ -35,8 +36,23 @@ export interface Goal {
 // Goal type for UI display
 export interface UIGoal extends Omit<Goal, 'iconName' | 'createdAt'> {
   icon: LucideIcon;
-  createdAt: string; // Or Date, depending on how you want to format
+  createdAt: Timestamp; // Keep as Timestamp for potential client-side formatting
 }
+
+// Predefined Goal Icons for selection
+export const GoalIcons: { name: string; icon: LucideIcon; iconName: string }[] = [
+  { name: "Travel", icon: Plane, iconName: "Plane" },
+  { name: "New Home", icon: Home, iconName: "Home" },
+  { name: "New Car", icon: Car, iconName: "Car" },
+  { name: "Gadget", icon: Smartphone, iconName: "Smartphone" },
+  { name: "Education", icon: BookOpen, iconName: "BookOpen" },
+  { name: "Shopping", icon: ShoppingBag, iconName: "ShoppingBag" },
+  { name: "Savings/Emergency", icon: ShieldCheck, iconName: "ShieldCheck" },
+  { name: "Gift", icon: Gift, iconName: "Gift" },
+  { name: "Other", icon: Target, iconName: "Target" },
+];
+
+export type GoalIconName = typeof GoalIcons[number]['iconName'];
 
 
 export interface SpendingCategory {
@@ -77,7 +93,7 @@ export interface Account {
   id: string;
   userId: string;
   name: string; // e.g., "Primary Savings", "Salary Account"
-  type: AccountType; 
+  type: AccountType;
   iconName: string; // Name of the Lucide icon
   // balance?: number; // Optional: Current balance, can be complex to maintain
   createdAt: Timestamp;
@@ -90,7 +106,7 @@ export interface UIAccount extends Omit<Account, 'iconName' | 'createdAt'> {
 
 // For Add Transaction Dialog
 export const TransactionCategories = [
-  "Food", "Groceries", "Bills", "Utilities", "Rent/Mortgage", "Transport", "Shopping", 
+  "Food", "Groceries", "Bills", "Utilities", "Rent/Mortgage", "Transport", "Shopping",
   "Entertainment", "Health", "Education", "Income", "Investment", "Travel", "Gifts", "Other"
 ] as const;
 export type TransactionCategory = typeof TransactionCategories[number];

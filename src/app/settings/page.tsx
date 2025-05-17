@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { ChevronLeft, UserCircle, Bell, Palette, Loader2, Sun, Moon, Laptop, Sparkles, MessageSquareQuote } from 'lucide-react';
+import { ChevronLeft, UserCircle, Bell, Palette, Loader2, Sun, Moon, Laptop, Sparkles, MessageSquareQuote, AlertTriangle } from 'lucide-react';
 import { getUserProfile, updateUserProfile, type UserProfile, type NotificationPreferences } from '@/services/userService';
 import { useToast } from '@/hooks/use-toast';
 
@@ -83,37 +83,63 @@ export default function SettingsPage() {
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, [currentTheme, applyTheme]);
 
+  const fetchProfileForSettings = useCallback(async (user: User) => {
+    setIsLoadingProfile(true);
+    try {
+      const profile = await getUserProfile(user.uid);
+      setUserProfile(profile);
+      if (profile?.notificationPreferences) {
+        setNotificationPrefs(profile.notificationPreferences);
+      } else {
+        // If profile exists but prefs don't, still set to default to ensure UI consistency
+        // This could happen if prefs were not added at user creation for older users
+        setNotificationPrefs(defaultNotificationPrefs);
+      }
+    } catch (error) {
+      console.error("Error fetching profile in settings:", error);
+      toast({ title: "Error Loading Profile", description: "Could not load profile settings.", variant: "destructive" });
+      setUserProfile(null); // Ensure profile is null on error
+      setNotificationPrefs(defaultNotificationPrefs); // Reset to defaults
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  }, [toast]);
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
-        setIsLoadingProfile(true);
-        try {
-          const profile = await getUserProfile(user.uid);
-          setUserProfile(profile);
-          if (profile?.notificationPreferences) {
-            setNotificationPrefs(profile.notificationPreferences);
-          } else {
-            setNotificationPrefs(defaultNotificationPrefs);
-          }
-        } catch (error) {
-          console.error("Error fetching profile in settings:", error);
-          toast({ title: "Error Loading Profile", description: "Could not load profile settings for notifications.", variant: "destructive" });
-          setNotificationPrefs(defaultNotificationPrefs);
-        } finally {
-          setIsLoadingProfile(false);
-        }
+        await fetchProfileForSettings(user);
       } else {
+        setCurrentUser(null);
+        setUserProfile(null);
+        setIsLoadingProfile(false);
         router.push('/login'); 
       }
       setIsLoadingAuth(false);
     });
     return () => unsubscribe();
-  }, [router, toast]);
+  }, [router, toast, fetchProfileForSettings]);
 
   const handleNotificationPrefChange = async (prefKey: keyof NotificationPreferences, value: boolean) => {
-    if (!currentUser) return;
+    if (!currentUser) {
+        toast({ title: "Authentication Error", description: "You must be logged in to change preferences.", variant: "destructive" });
+        return;
+    }
+    // Check if profile is loaded. If still loading, perhaps wait or disable action.
+    // If not loading and profile is null, it means fetch failed or no profile.
+    if (!isLoadingProfile && !userProfile) {
+        toast({ 
+            title: "Profile Data Missing", 
+            description: "Your user profile could not be loaded. Preferences cannot be saved at this time.", 
+            variant: "destructive" 
+        });
+        // Optionally revert the switch UI state if desired, though re-fetching on error does this
+        await fetchProfileForSettings(currentUser); // Attempt to re-fetch to reset UI
+        return;
+    }
+
 
     const updatedPrefs = { ...notificationPrefs, [prefKey]: value };
     setNotificationPrefs(updatedPrefs); // Optimistic update
@@ -123,34 +149,29 @@ export default function SettingsPage() {
       toast({ title: "Preferences Updated", description: "Your notification preferences have been saved." });
     } catch (error: any) {
       console.error("Error updating notification preferences:", error);
-      let description = `Failed to save notification preferences. Reason: ${error.message || "Unknown error."}`;
-      if (error.message && error.message.toLowerCase().includes('permission denied')) {
-        description = "Permission Denied: Could not save preferences. Please ensure Firestore rules are deployed correctly and your user data (especially 'createdAt' timestamp) is valid.";
+      let description = error.message || "Could not save notification preferences. Please try again.";
+      // Check for specific error message content from userService
+      if (error.message && error.message.includes("No document to update")) {
+          description = "Your user profile document was not found. Cannot save preferences. Please try logging out and back in, or contact support if this persists.";
+      } else if (error.message && error.message.toLowerCase().includes('permission denied')) {
+        description = "Permission Denied: Could not save preferences. Please ensure Firestore rules are deployed correctly and allow updates to 'notificationPreferences'.";
       }
+      
       toast({
         title: "Error Updating Preferences",
         description: description,
         variant: "destructive",
       });
-      // Revert optimistic UI update - fetch fresh profile data to ensure UI consistency
+      
+      // Revert optimistic UI update by re-fetching profile data
       if (currentUser) {
-        try {
-          const profile = await getUserProfile(currentUser.uid);
-          if (profile?.notificationPreferences) {
-            setNotificationPrefs(profile.notificationPreferences);
-          } else {
-             setNotificationPrefs(defaultNotificationPrefs); // Revert to defaults if profile fetch fails
-          }
-        } catch (fetchError) {
-            console.error("Error re-fetching profile after update failure:", fetchError);
-            setNotificationPrefs(defaultNotificationPrefs); // Fallback if re-fetch fails
-        }
+        await fetchProfileForSettings(currentUser);
       }
     }
   };
 
 
-  if (isLoadingAuth || !currentUser || isLoadingProfile) {
+  if (isLoadingAuth || !currentUser) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -203,48 +224,66 @@ export default function SettingsPage() {
               <CardDescription>Customize the AI insights and notifications you receive.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
-                <Label htmlFor="overspending-alerts" className="flex flex-col space-y-1">
-                  <span>Overspending Alerts</span>
-                  <span className="font-normal leading-snug text-muted-foreground">
-                    Get notified about significant overspending in categories.
-                  </span>
-                </Label>
-                <Switch
-                  id="overspending-alerts"
-                  checked={notificationPrefs.onOverspending}
-                  onCheckedChange={(checked) => handleNotificationPrefChange('onOverspending', checked)}
-                  aria-label="Toggle overspending alerts"
-                />
-              </div>
-              <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
-                <Label htmlFor="large-transaction-alerts" className="flex flex-col space-y-1">
-                  <span>Large Transaction Alerts</span>
-                  <span className="font-normal leading-snug text-muted-foreground">
-                    Receive alerts for unusually large transactions.
-                  </span>
-                </Label>
-                <Switch
-                  id="large-transaction-alerts"
-                  checked={notificationPrefs.onLargeTransactions}
-                  onCheckedChange={(checked) => handleNotificationPrefChange('onLargeTransactions', checked)}
-                  aria-label="Toggle large transaction alerts"
-                />
-              </div>
-              <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
-                <Label htmlFor="savings-opportunity-alerts" className="flex flex-col space-y-1">
-                  <span>Savings Opportunity Alerts</span>
-                  <span className="font-normal leading-snug text-muted-foreground">
-                    Get insights on potential savings opportunities.
-                  </span>
-                </Label>
-                <Switch
-                  id="savings-opportunity-alerts"
-                  checked={notificationPrefs.onSavingsOpportunities}
-                  onCheckedChange={(checked) => handleNotificationPrefChange('onSavingsOpportunities', checked)}
-                  aria-label="Toggle savings opportunity alerts"
-                />
-              </div>
+              {isLoadingProfile ? (
+                <div className="flex items-center justify-center text-muted-foreground py-4">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Loading preferences...
+                </div>
+              ) : !userProfile ? (
+                <div className="flex flex-col items-center justify-center text-center text-muted-foreground py-4 p-3 bg-destructive/10 rounded-md">
+                  <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
+                  <p className="font-semibold">Profile Not Found</p>
+                  <p className="text-sm">Your user profile data could not be loaded. Notification preferences cannot be set at this time. Please try logging out and back in, or contact support if the issue persists.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
+                    <Label htmlFor="overspending-alerts" className="flex flex-col space-y-1">
+                      <span>Overspending Alerts</span>
+                      <span className="font-normal leading-snug text-muted-foreground">
+                        Get notified about significant overspending in categories.
+                      </span>
+                    </Label>
+                    <Switch
+                      id="overspending-alerts"
+                      checked={notificationPrefs.onOverspending}
+                      onCheckedChange={(checked) => handleNotificationPrefChange('onOverspending', checked)}
+                      aria-label="Toggle overspending alerts"
+                      disabled={!userProfile || isLoadingProfile}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
+                    <Label htmlFor="large-transaction-alerts" className="flex flex-col space-y-1">
+                      <span>Large Transaction Alerts</span>
+                      <span className="font-normal leading-snug text-muted-foreground">
+                        Receive alerts for unusually large transactions.
+                      </span>
+                    </Label>
+                    <Switch
+                      id="large-transaction-alerts"
+                      checked={notificationPrefs.onLargeTransactions}
+                      onCheckedChange={(checked) => handleNotificationPrefChange('onLargeTransactions', checked)}
+                      aria-label="Toggle large transaction alerts"
+                      disabled={!userProfile || isLoadingProfile}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
+                    <Label htmlFor="savings-opportunity-alerts" className="flex flex-col space-y-1">
+                      <span>Savings Opportunity Alerts</span>
+                      <span className="font-normal leading-snug text-muted-foreground">
+                        Get insights on potential savings opportunities.
+                      </span>
+                    </Label>
+                    <Switch
+                      id="savings-opportunity-alerts"
+                      checked={notificationPrefs.onSavingsOpportunities}
+                      onCheckedChange={(checked) => handleNotificationPrefChange('onSavingsOpportunities', checked)}
+                      aria-label="Toggle savings opportunity alerts"
+                      disabled={!userProfile || isLoadingProfile}
+                    />
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -327,3 +366,4 @@ export default function SettingsPage() {
   );
 }
 
+    

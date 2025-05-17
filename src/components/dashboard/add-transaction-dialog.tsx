@@ -27,7 +27,7 @@ import { addTransaction } from '@/services/transactionService';
 import type { User } from 'firebase/auth';
 import { TransactionCategories, type TransactionCategory, type UIAccount } from '@/types';
 import { Loader2, PlusCircle, Calendar as CalendarIcon, Utensils, FileText, ShoppingCart, Briefcase, Film, Car, BookOpen, Home, PiggyBank, Landmark, CreditCard, CircleDollarSign, HeartPulse, Building, Gift, Plane, TrendingUp } from 'lucide-react';
-import { format, parse } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 const categoryToIconMap: Record<TransactionCategory, string> = {
@@ -54,13 +54,13 @@ const formSchema = z.object({
   amount: z.coerce.number().positive({ message: "Amount must be positive." }),
   type: z.enum(['debit', 'credit'], { required_error: "Please select transaction type." }),
   category: z.enum(TransactionCategories, { required_error: "Please select a category." }),
-  date: z.date({ required_error: "Please select a date." }),
+  date: z.date({ required_error: "Please select a date." }).nullable(), // Allow null for "Pick a date" state
 });
 
 interface AddTransactionDialogProps {
   currentUser: User | null;
   selectedAccountId: string | undefined;
-  allAccounts: UIAccount[]; // Changed from accountsExist
+  allAccounts: UIAccount[]; 
   onTransactionAdded: () => void;
 }
 
@@ -90,6 +90,11 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
     }
     if (!selectedAccountId) {
       toast({ title: "Error", description: "Please select an account first.", variant: "destructive" });
+      return;
+    }
+    if (!values.date) {
+      toast({ title: "Error", description: "Please select a transaction date.", variant: "destructive" });
+      form.setError("date", { type: "manual", message: "Date is required." });
       return;
     }
 
@@ -209,18 +214,18 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
                 <PopoverTrigger asChild>
                   <Button
                     variant={"outline"}
-                    className={cn("w-full justify-start text-left font-normal mt-1", !form.getValues('date') && "text-muted-foreground")}
+                    className={cn("w-full justify-start text-left font-normal mt-1", !form.watch('date') && "text-muted-foreground")}
                     disabled={isLoading}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {form.watch('date') ? format(form.watch('date'), "PPP") : <span>Pick a date</span>}
+                    {form.watch('date') ? format(form.watch('date')!, "PPP") : <span>Pick a date</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
                   <Calendar
                     mode="single"
                     selected={form.watch('date')}
-                    onSelect={(date) => date && form.setValue('date', date)}
+                    onSelect={(date) => form.setValue('date', date || null)}
                     initialFocus
                     disabled={isLoading}
                   />
@@ -246,5 +251,3 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
     </Dialog>
   );
 }
-
-    

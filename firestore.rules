@@ -4,52 +4,37 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users collection:
-    // - Anyone can create their own user profile (e.g., on signup).
-    // - Authenticated users can read, update, or delete their OWN profile.
+    // Users Collection
+    // Users can create their own profile.
+    // Users can read and update their own profile.
+    // Users cannot delete their profile through this rule (deletion might be an admin task or a specific function).
     match /users/{userId} {
-      allow create: if request.auth != null && request.auth.uid == userId 
-                      && request.resource.data.id == userId; // Ensure ID field matches auth UID
-      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.id == request.auth.uid;
     }
 
-    // Transactions collection:
-    // - Authenticated users can create transactions for themselves.
-    // - Authenticated users can read, update, or delete ONLY their own transactions.
+    // Transactions Collection
+    // Users can create transactions for themselves.
+    // Users can only read, update, or delete their own transactions.
     match /transactions/{transactionId} {
-      allow create: if request.auth != null 
-                      && 'userId' in request.resource.data 
-                      && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if request.auth != null 
-                                  && 'userId' in resource.data
-                                  && resource.data.userId != null 
-                                  && resource.data.userId == request.auth.uid;
+      allow read, update, delete: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.resource.data.userId != null && request.resource.data.userId == request.auth.uid;
     }
 
-    // Goals collection:
-    // - Authenticated users can create goals for themselves.
-    // - Authenticated users can read, update, or delete ONLY their own goals.
+    // Goals Collection
+    // Users can create goals for themselves.
+    // Users can only read, update, or delete their own goals.
     match /goals/{goalId} {
-      allow create: if request.auth != null 
-                      && 'userId' in request.resource.data 
-                      && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if request.auth != null 
-                                  && 'userId' in resource.data
-                                  && resource.data.userId != null 
-                                  && resource.data.userId == request.auth.uid;
+      allow read, update, delete: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.resource.data.userId != null && request.resource.data.userId == request.auth.uid;
     }
-
-    // Accounts collection:
-    // - Authenticated users can create accounts for themselves.
-    // - Authenticated users can read, update, or delete ONLY their own accounts.
-     match /accounts/{accountId} {
-      allow create: if request.auth != null 
-                      && 'userId' in request.resource.data 
-                      && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if request.auth != null 
-                                  && 'userId' in resource.data
-                                  && resource.data.userId != null
-                                  && resource.data.userId == request.auth.uid;
+    
+    // Accounts Collection
+    // Users can create accounts for themselves.
+    // Users can only read, update, or delete their own accounts.
+    match /accounts/{accountId} {
+      allow read, update, delete: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.resource.data.userId != null && request.resource.data.userId == request.auth.uid;
     }
   }
 }

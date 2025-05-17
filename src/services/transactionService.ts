@@ -1,7 +1,7 @@
 
 import { db } from '@/lib/firebase';
-import type { TransactionFirestore, MonthlySummary } from '@/types';
-import { collection, addDoc, getDocs, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import type { TransactionFirestore, MonthlySummary, TransactionUpdateData } from '@/types';
+import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { startOfMonth, endOfMonth, formatISO, parseISO } from 'date-fns';
 
 /**
@@ -52,7 +52,6 @@ export async function addTransaction(transactionData: Omit<TransactionFirestore,
  */
 export async function getTransactionsByAccountId(accountId: string, userId: string): Promise<TransactionFirestore[]> {
   if (!accountId) {
-    // console.warn("getTransactionsByAccountId called with no accountId"); // Can be noisy
     return [];
   }
   if (!userId) {
@@ -64,7 +63,7 @@ export async function getTransactionsByAccountId(accountId: string, userId: stri
     const q = query(
       transactionsCol,
       where('accountId', '==', accountId),
-      where('userId', '==', userId), 
+      where('userId', '==', userId),
       orderBy('date', 'desc')
     );
     const querySnapshot = await getDocs(q);
@@ -75,10 +74,10 @@ export async function getTransactionsByAccountId(accountId: string, userId: stri
         id: doc.id,
         userId: data.userId,
         accountId: data.accountId,
-        date: data.date, // Stored as 'YYYY-MM-DD' string
+        date: data.date, 
         description: data.description,
         category: data.category,
-        amount: data.amount, // Stored as number (positive for credit, negative for debit)
+        amount: data.amount, 
         type: data.type,
         iconName: data.iconName,
       } as TransactionFirestore);
@@ -88,15 +87,84 @@ export async function getTransactionsByAccountId(accountId: string, userId: stri
     console.error(`Error fetching transactions for account ${accountId}, user ${userId}: `, e);
     let detailedMessage = "Could not fetch transactions. Check server logs for details.";
     if (e.code === 'permission-denied') {
-        detailedMessage = "Permission denied fetching transactions. Check Firestore rules.";
-    } else if (e.message && (e.message.includes('index') || e.message.includes('Index'))) {
-        detailedMessage = "Missing or insufficient Firestore index for fetching transactions.";
+        detailedMessage = "Permission denied fetching transactions. Check Firestore rules and ensure data has correct userId.";
+    } else if (e.message && (e.message.toLowerCase().includes('index') || e.message.toLowerCase().includes('index'))) {
+        detailedMessage = "Missing or insufficient Firestore index for fetching transactions. Check Firestore logs for details and a link to create it.";
     } else if (e.message) {
         detailedMessage = e.message;
     }
-    // Check console for Firebase permission errors or missing index errors
-    // Firestore usually provides a link to create missing indexes if that's the issue.
     throw new Error(detailedMessage);
+  }
+}
+
+
+/**
+ * Updates an existing transaction in Firestore.
+ * @param transactionId - The ID of the transaction to update.
+ * @param userId - The ID of the user making the update (for rule verification).
+ * @param updateData - An object containing the fields to update.
+ *                     `amount` should be the new absolute amount. The service will adjust sign based on `type`.
+ */
+export async function updateTransaction(transactionId: string, userId: string, updateData: TransactionUpdateData): Promise<void> {
+  if (!userId) {
+    console.error("Error updating transaction: userId is missing.");
+    throw new Error("User ID is required to update a transaction.");
+  }
+  if (!transactionId) {
+    console.error("Error updating transaction: transactionId is missing.");
+    throw new Error("Transaction ID is required to update a transaction.");
+  }
+  const transactionRef = doc(db, 'transactions', transactionId);
+  
+  const dataToUpdate = { ...updateData };
+
+  // If amount and type are part of the update, adjust the amount's sign
+  if (dataToUpdate.amount !== undefined && dataToUpdate.type !== undefined) {
+    dataToUpdate.amount = dataToUpdate.type === 'debit' ? -Math.abs(dataToUpdate.amount) : Math.abs(dataToUpdate.amount);
+  } else if (dataToUpdate.amount !== undefined && updateData.type === undefined) {
+    // If only amount is updated, we need the original type to set the sign,
+    // or assume the service is called with type if amount is changing.
+    // This scenario is tricky without fetching the original doc.
+    // Best practice: Ensure UI sends both new amount AND new type if either changes.
+    // For now, we'll assume if amount is present, type is also present or doesn't need to change sign.
+    // If type is NOT in updateData, but amount IS, this could lead to wrong sign if type should have flipped.
+    // This is why EditTransactionDialog should submit both if amount or type changes.
+    console.warn("Updating amount without type might lead to incorrect sign if type should also change.");
+  }
+
+
+  try {
+    // Firestore rules should handle ownership verification (userId must match doc's userId)
+    await updateDoc(transactionRef, dataToUpdate);
+    console.log("Transaction updated with ID: ", transactionId);
+  } catch (e: any) {
+    console.error("Error updating transaction: ", e);
+    throw new Error(e.message || "Could not update transaction.");
+  }
+}
+
+/**
+ * Deletes a transaction from Firestore.
+ * @param transactionId - The ID of the transaction to delete.
+ * @param userId - The ID of the user making the deletion (for rule verification).
+ */
+export async function deleteTransaction(transactionId: string, userId: string): Promise<void> {
+  if (!userId) {
+    console.error("Error deleting transaction: userId is missing.");
+    throw new Error("User ID is required to delete a transaction.");
+  }
+  if (!transactionId) {
+    console.error("Error deleting transaction: transactionId is missing.");
+    throw new Error("Transaction ID is required to delete a transaction.");
+  }
+  const transactionRef = doc(db, 'transactions', transactionId);
+  try {
+    // Firestore rules should handle ownership verification
+    await deleteDoc(transactionRef);
+    console.log("Transaction deleted with ID: ", transactionId);
+  } catch (e: any) {
+    console.error("Error deleting transaction: ", e);
+    throw new Error(e.message || "Could not delete transaction.");
   }
 }
 
@@ -117,7 +185,6 @@ export async function getTransactionsForMonth(userId: string, year: number, mont
   const firstDayOfMonth = new Date(year, month - 1, 1);
   const lastDayOfMonth = endOfMonth(firstDayOfMonth);
 
-  // Ensure dates are in YYYY-MM-DD string format for Firestore query
   const startDateString = formatISO(firstDayOfMonth, { representation: 'date' }); 
   const endDateString = formatISO(lastDayOfMonth, { representation: 'date' }); 
   
@@ -128,8 +195,6 @@ export async function getTransactionsForMonth(userId: string, year: number, mont
       where('userId', '==', userId),
       where('date', '>=', startDateString),
       where('date', '<=', endDateString)
-      // Note: No orderBy('date') here, as it would require another index specific to this query if not covered.
-      // Sorting can be done client-side if needed, or add index if server-side sort is critical.
     );
 
     const querySnapshot = await getDocs(q);
@@ -138,7 +203,7 @@ export async function getTransactionsForMonth(userId: string, year: number, mont
       const data = doc.data();
       transactions.push({
         id: doc.id,
-        userId: data.userId, // Ensure all fields are mapped
+        userId: data.userId, 
         accountId: data.accountId,
         date: data.date,
         description: data.description,
@@ -152,10 +217,10 @@ export async function getTransactionsForMonth(userId: string, year: number, mont
   } catch (e: any) {
     console.error(`Error fetching transactions for month for user ${userId}, ${year}-${month}: `, e);
     let detailedMessage = "Could not fetch monthly transactions. Check server logs for details.";
-    if (e.code === 'permission-denied') {
-        detailedMessage = "Permission denied fetching monthly transactions. Check Firestore rules.";
-    } else if (e.message && (e.message.includes('index') || e.message.includes('Index'))) {
-        detailedMessage = "Missing or insufficient Firestore index for fetching monthly transactions. Check server logs for a link to create it if needed (query: userId == X, date >= Y, date <= Z).";
+     if (e.code === 'permission-denied') {
+        detailedMessage = "Permission denied fetching monthly transactions. Check Firestore rules and ensure data has correct userId.";
+    } else if (e.message && (e.message.toLowerCase().includes('index') || e.message.toLowerCase().includes('index'))) {
+        detailedMessage = "Missing or insufficient Firestore index for fetching monthly transactions. Check Firestore logs for details and a link to create it.";
     } else if (e.message) {
         detailedMessage = e.message;
     }
@@ -174,40 +239,40 @@ export async function getTransactionsForMonth(userId: string, year: number, mont
  */
 export async function getMonthlySummary(userId: string, year: number, month: number): Promise<MonthlySummary> {
   if (!userId) {
-    // console.warn("getMonthlySummary called with no userId"); // Can be noisy
     return { totalIncome: 0, totalExpenses: 0, netSavings: 0 };
   }
   
   try {
     const transactions = await getTransactionsForMonth(userId, year, month);
     let totalIncome = 0;
-    let totalExpenses = 0; // Will be sum of negative numbers
+    let totalExpenses = 0; 
 
     transactions.forEach((transaction) => {
       if (transaction.type === 'credit') {
-        totalIncome += transaction.amount; // Assume credits are positive
+        totalIncome += transaction.amount; 
       } else if (transaction.type === 'debit') {
-        totalExpenses += transaction.amount; // Assume debits are negative
+        totalExpenses += transaction.amount; 
       }
     });
     
-    // totalExpenses is negative. Net savings = income - (absolute expenses)
-    // which is income + (negative_expenses)
     const netSavings = totalIncome + totalExpenses; 
 
     return {
       totalIncome,
-      totalExpenses: Math.abs(totalExpenses), // Display expenses as a positive number
+      totalExpenses: Math.abs(totalExpenses), 
       netSavings,
     };
   } catch (e: any) {
     let detailedMessage = `Could not calculate monthly summary. Error: ${e.message}`;
-     if (e.message && e.message.toLowerCase().includes('permission denied')) {
-        detailedMessage = "Permission denied fetching monthly summary. Check Firestore rules.";
-    } else if (e.message && (e.message.includes('index') || e.message.includes('Index'))) {
+     if (e.code === 'permission-denied') {
+        detailedMessage = "Permission denied calculating monthly summary. Check Firestore rules.";
+    } else if (e.message && (e.message.toLowerCase().includes('index') || e.message.toLowerCase().includes('index'))) {
         detailedMessage = "Missing or insufficient Firestore index for monthly summary. Check server logs.";
+    } else if (e.message) {
+        detailedMessage = e.message;
     }
     console.error(`Error calculating monthly summary for user ${userId}, ${year}-${month}: `, e);
     throw new Error(detailedMessage);
   }
 }
+

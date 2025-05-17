@@ -23,6 +23,10 @@ export interface Transaction extends Omit<TransactionFirestore, 'iconName' | 'id
   icon: LucideIcon;
 }
 
+// Data for updating a transaction, excluding non-updatable fields like id, userId, accountId
+export type TransactionUpdateData = Partial<Omit<TransactionFirestore, 'id' | 'userId' | 'accountId'>>;
+
+
 export interface Goal {
   id: string;
   userId: string; // ID of the user who owns this goal
@@ -113,3 +117,4 @@ export type TransactionCategory = typeof TransactionCategories[number];
 
 // Data for updating a goal, excluding non-updatable fields
 export type GoalUpdateData = Partial<Omit<Goal, 'id' | 'userId' | 'createdAt'>>;
+

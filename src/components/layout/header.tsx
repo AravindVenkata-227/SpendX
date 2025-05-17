@@ -2,9 +2,18 @@
 "use client";
 
 import { useRouter } from 'next/navigation';
+import Link from 'next/link'; // Import Link
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bell, Settings, Wallet, LogOut, Loader2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Bell, Settings, Wallet, LogOut, Loader2, User as UserIcon, LayoutDashboard } from "lucide-react";
 import { auth } from '@/lib/firebase';
 import { signOut, onAuthStateChanged, type User } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
@@ -29,15 +38,13 @@ export default function Header() {
           setUserProfile(profile);
         } catch (error) {
           console.error("Error fetching user profile in header:", error);
-          // Optionally show a toast if profile fetch fails, e.g.:
-          // toast({ title: "Profile Error", description: "Could not load user profile.", variant: "destructive" });
         }
       } else {
-        setUserProfile(null); // Clear profile if user logs out
+        setUserProfile(null);
       }
       setIsLoadingAuth(false);
     });
-    return () => unsubscribe(); // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
 
 
@@ -50,7 +57,7 @@ export default function Header() {
         description: "You have been successfully logged out.",
         variant: "default",
       });
-      setUserProfile(null); // Clear profile on logout
+      setUserProfile(null);
       router.push('/login');
     } catch (error: any) {
       console.error("Logout error:", error);
@@ -80,28 +87,70 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-card">
       <div className="container flex h-16 items-center justify-between px-4 md:px-6">
-        <div className="flex items-center gap-2 text-lg font-semibold text-primary">
+        <Link href="/" className="flex items-center gap-2 text-lg font-semibold text-primary">
           <Wallet className="h-6 w-6" />
           <span>FinTrack AI</span>
-        </div>
-        <nav className="flex items-center space-x-2">
+        </Link>
+        <nav className="flex items-center space-x-2 sm:space-x-4">
           <Button variant="ghost" size="icon" aria-label="Notifications" disabled={isLoggingOut || isLoadingAuth}>
             <Bell className="h-5 w-5" />
           </Button>
           <Button variant="ghost" size="icon" aria-label="Settings" disabled={isLoggingOut || isLoadingAuth}>
             <Settings className="h-5 w-5" />
           </Button>
-          {currentUser && (
-            <Button variant="ghost" size="icon" aria-label="Logout" onClick={handleLogout} disabled={isLoggingOut || isLoadingAuth}>
-              {isLoggingOut ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
+          
+          {isLoadingAuth ? (
+            <Loader2 className="h-6 w-6 animate-spin" />
+          ) : currentUser ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage 
+                      src={`https://placehold.co/40x40.png?text=${getInitials(userProfile?.fullName, currentUser.email)}`} 
+                      alt={userProfile?.fullName || currentUser.email || "User Avatar"}
+                      data-ai-hint="user avatar"
+                    />
+                    <AvatarFallback>{getInitials(userProfile?.fullName, currentUser.email)}</AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium leading-none">
+                      {userProfile?.fullName || "User"}
+                    </p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      {currentUser.email}
+                    </p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/">
+                    <LayoutDashboard className="mr-2 h-4 w-4" />
+                    <span>Dashboard</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/profile">
+                    <UserIcon className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} disabled={isLoggingOut}>
+                  {isLoggingOut ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogOut className="mr-2 h-4 w-4" />}
+                  <span>{isLoggingOut ? "Logging out..." : "Log out"}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+             <Button asChild>
+                <Link href="/login">Login</Link>
             </Button>
           )}
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={currentUser ? `https://placehold.co/40x40.png?text=${getInitials(userProfile?.fullName, currentUser.email)}` : "https://placehold.co/40x40.png"} alt="User Avatar" data-ai-hint="user avatar" />
-            <AvatarFallback>
-              {isLoadingAuth ? <Loader2 className="h-4 w-4 animate-spin" /> : getInitials(userProfile?.fullName, currentUser?.email)}
-            </AvatarFallback>
-          </Avatar>
         </nav>
       </div>
     </header>

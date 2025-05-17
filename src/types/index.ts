@@ -28,7 +28,7 @@ export interface Goal {
   targetAmount: number;
   savedAmount: number;
   iconName: string; // Store icon name, map to component on client
-  createdAt?: Timestamp; // Optional: track when goal was created
+  createdAt: Timestamp; // Track when goal was created
 }
 
 // Goal type for UI display
@@ -49,4 +49,13 @@ export interface ChartConfig {
     color: string;
     icon?: LucideIcon;
   };
+}
+
+// Represents a user profile as stored in Firestore
+export interface UserProfile {
+  id: string; // Corresponds to Firebase Auth UID
+  fullName: string;
+  email: string;
+  createdAt: Timestamp;
+  // Add other profile fields here if needed, e.g., notificationPreferences
 }

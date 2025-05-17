@@ -9,8 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { User, Mail, Lock, Wallet, Users, Loader2 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, type UserCredential } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
+import { createUserProfile } from '@/services/userService';
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState('');
@@ -33,19 +34,37 @@ export default function SignupPage() {
     }
     setIsLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      // You might want to store fullName in Firestore user profile here
-      toast({
-        title: "Account Created",
-        description: "Welcome! Please login to continue.",
-        variant: "default",
-      });
+      const userCredential: UserCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      if (userCredential.user) {
+        await createUserProfile(userCredential.user.uid, fullName, email);
+        toast({
+          title: "Account Created",
+          description: "Welcome! User profile also created. Please login to continue.",
+          variant: "default",
+        });
+      } else {
+         toast({
+          title: "Account Created (Profile Skipped)",
+          description: "Welcome! Please login to continue. (User object missing for profile creation)",
+          variant: "default",
+        });
+      }
       router.push('/login');
     } catch (error: any) {
       console.error('Signup error:', error);
+      // Check for specific Firebase error codes
+      let errorMessage = "Could not create account. Please try again.";
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'This email address is already in use. Please try a different email or login.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'The password is too weak. Please use a stronger password (at least 6 characters).';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
       toast({
         title: "Signup Failed",
-        description: error.message || "Could not create account. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

@@ -4,58 +4,48 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users:
-    // - Anyone can create their own user profile document.
-    // - Authenticated users can read, delete their own profile.
-    // - Authenticated users can update their own profile, but cannot change 'id', 'email', or 'createdAt' fields.
+    // Users Collection
+    // Users can only read their own profile.
+    // Users can only create their own profile document.
+    // Users can only update their own profile, and cannot change their email, id, or original creation timestamp.
     match /users/{userId} {
-      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null && request.auth.uid == userId;
-
-      allow update: if request.auth != null && request.auth.uid == userId &&
-                    // Ensure the 'id' field in the document (which should match userId) is not changed.
-                    request.resource.data.id == resource.data.id &&
-                    // Ensure email is not changed.
-                    request.resource.data.email == resource.data.email &&
-                    // Ensure createdAt is not changed.
-                    // This handles cases where createdAt might be null (e.g., for very old documents or before serverTimestamp resolves)
-                    // or is a valid Timestamp.
-                    (
-                      (resource.data.createdAt == null && request.resource.data.createdAt == null) ||
-                      (resource.data.createdAt != null && request.resource.data.createdAt != null &&
-                       request.resource.data.createdAt.toMillis() == resource.data.createdAt.toMillis())
-                    );
-                    // Other fields like fullName, notificationPreferences, photoURL can be updated.
+      // Allow update if the user is authenticated and owns the profile,
+      // AND they are not trying to change their email, original ID, or creation timestamp.
+      // Other fields like fullName, photoURL, notificationPreferences can be updated.
+      allow update: if request.auth != null &&
+                       request.auth.uid == userId &&
+                       request.resource.data.id == resource.data.id && 
+                       request.resource.data.email == resource.data.email &&
+                       request.resource.data.createdAt.toMillis() == resource.data.createdAt.toMillis();
     }
 
-    // Transactions:
-    // - Users can only CRUD their own transactions.
+    // Transactions Collection
+    // Users can only manage their own transactions.
     match /transactions/{transactionId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      allow update: if request.auth != null && request.auth.uid == resource.data.userId &&
-                       request.auth.uid == request.resource.data.userId; // Owns existing and new version
-      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read, write, update, delete: if request.auth != null && 
+                                        resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+                       request.resource.data.userId == request.auth.uid;
     }
 
-    // Goals:
-    // - Users can only CRUD their own goals.
+    // Goals Collection
+    // Users can only manage their own goals.
     match /goals/{goalId} {
-       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-       allow update: if request.auth != null && request.auth.uid == resource.data.userId &&
-                        request.auth.uid == request.resource.data.userId; // Owns existing and new version
-       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read, write, update, delete: if request.auth != null && 
+                                   resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+                       request.resource.data.userId == request.auth.uid;
     }
 
-    // Accounts:
-    // - Users can only CRUD their own accounts.
+    // Accounts Collection
+    // Users can only manage their own accounts.
     match /accounts/{accountId} {
-       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-       allow update: if request.auth != null && request.auth.uid == resource.data.userId &&
-                        request.auth.uid == request.resource.data.userId; // Owns existing and new version
-       allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read, write, update, delete: if request.auth != null && 
+                                   resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+                       request.resource.data.userId == request.auth.uid;
     }
   }
 }

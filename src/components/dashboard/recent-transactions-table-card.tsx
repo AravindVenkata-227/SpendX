@@ -2,10 +2,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import type { Transaction as UITransactionType, TransactionFirestore } from "@/types";
+import type { Transaction as UITransactionType, TransactionFirestore, Account as FirestoreAccount, UIAccount } from "@/types";
 import { getTransactionsByAccountId, addTransaction } from '@/services/transactionService';
-import { auth } from '@/lib/firebase'; // Import auth
-import { onAuthStateChanged, type User } from 'firebase/auth'; // Import onAuthStateChanged
+import { getAccountsByUserId } from '@/services/accountService'; // Import account service
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 
 import {
   Card,
@@ -43,23 +44,15 @@ import {
   Car,
   PiggyBank,
   Landmark,
+  CreditCard,
+  CircleDollarSign, // Default account icon
   Loader2,
   PlusCircle,
+  Banknote, // Another option for generic account
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface BankAccount {
-  id: string;
-  name: string;
-  icon: React.ElementType;
-}
-
-const MOCK_ACCOUNTS: BankAccount[] = [
-  { id: 'acc1', name: 'Savings Account (XXXX1234)', icon: PiggyBank },
-  { id: 'acc2', name: 'Current Account (YYYY5678)', icon: Briefcase },
-  { id: 'acc3', name: 'Salary Account (ZZZZ9012)', icon: Landmark },
-];
-
+// Icon mapping for transaction categories
 const categoryIcons: { [key: string]: React.ElementType } = {
   Food: Utensils,
   Bills: FileText,
@@ -73,10 +66,29 @@ const categoryIcons: { [key: string]: React.ElementType } = {
   Default: FileText,
 };
 
+// Icon mapping for account types
+const accountTypeIcons: { [key: string]: React.ElementType } = {
+  Savings: PiggyBank,
+  Checking: Briefcase, // Or Banknote
+  Current: Landmark,
+  CreditCard: CreditCard,
+  Default: CircleDollarSign,
+};
+
+const mapFirestoreAccountToUIAccount = (account: FirestoreAccount): UIAccount => {
+  const IconComponent = accountTypeIcons[account.type] || accountTypeIcons.Default;
+  return {
+    id: account.id,
+    userId: account.userId,
+    name: account.name,
+    type: account.type,
+    icon: IconComponent,
+  };
+};
+
 const mapFirestoreTransactionToUI = (transaction: TransactionFirestore): UITransactionType => {
   const IconComponent = categoryIcons[transaction.category] || (transaction.iconName && categoryIcons[transaction.iconName]) || categoryIcons.Default;
   return {
-    // Explicitly map fields excluding userId for the UI type
     id: transaction.id!,
     accountId: transaction.accountId,
     date: transaction.date,
@@ -88,12 +100,13 @@ const mapFirestoreTransactionToUI = (transaction: TransactionFirestore): UITrans
   };
 };
 
-
 export default function RecentTransactionsTableCard() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>(MOCK_ACCOUNTS[0]?.id);
+  const [accounts, setAccounts] = useState<UIAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>(undefined);
   const [transactions, setTransactions] = useState<UITransactionType[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const { toast } = useToast();
   const [formattedDates, setFormattedDates] = useState<Record<string, string>>({});
 
@@ -101,30 +114,68 @@ export default function RecentTransactionsTableCard() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (!user) {
-        // Handle logged out state if necessary, e.g., clear transactions
+        setAccounts([]);
         setTransactions([]);
         setFormattedDates({});
-        // toast({ title: "Not Authenticated", description: "Please login to view transactions.", variant: "destructive" });
+        setSelectedAccountId(undefined);
+        setIsLoadingAccounts(false);
+        setIsLoadingTransactions(false);
       }
     });
     return () => unsubscribe();
   }, []);
 
+  const fetchAccounts = useCallback(async (userId: string) => {
+    setIsLoadingAccounts(true);
+    try {
+      const firestoreAccounts = await getAccountsByUserId(userId);
+      const uiAccounts = firestoreAccounts.map(mapFirestoreAccountToUIAccount);
+      setAccounts(uiAccounts);
+      if (uiAccounts.length > 0 && !selectedAccountId) {
+        setSelectedAccountId(uiAccounts[0].id); // Select first account by default
+      } else if (uiAccounts.length === 0) {
+        setSelectedAccountId(undefined); // No accounts, no selection
+        toast({
+          title: "No Accounts Found",
+          description: "Please add a financial account to track transactions.",
+          variant: "default",
+        });
+      }
+    } catch (error: any) {
+      console.error("Failed to fetch accounts:", error);
+      toast({
+        title: "Error Loading Accounts",
+        description: error.message || "Could not fetch your accounts.",
+        variant: "destructive",
+      });
+      setAccounts([]);
+      setSelectedAccountId(undefined);
+    } finally {
+      setIsLoadingAccounts(false);
+    }
+  }, [toast, selectedAccountId]); // Added selectedAccountId to dependencies
 
-  const fetchTransactions = useCallback(async (accountId: string | undefined) => {
-    if (!accountId) {
+  useEffect(() => {
+    if (currentUser) {
+      fetchAccounts(currentUser.uid);
+    } else {
+      setIsLoadingAccounts(false);
+      setAccounts([]);
+      setSelectedAccountId(undefined);
+    }
+  }, [currentUser, fetchAccounts]);
+
+
+  const fetchTransactions = useCallback(async (accountId: string | undefined, userId: string) => {
+    if (!accountId || !userId) {
       setTransactions([]);
       setFormattedDates({});
+      setIsLoadingTransactions(false);
       return;
     }
-    if (!currentUser) {
-      // toast({ title: "Authentication Required", description: "Please log in to fetch transactions.", variant: "destructive" });
-      setTransactions([]); // Clear transactions if user logs out
-      return;
-    }
-    setIsLoading(true);
+    setIsLoadingTransactions(true);
     try {
-      const firestoreTransactions = await getTransactionsByAccountId(accountId, currentUser.uid);
+      const firestoreTransactions = await getTransactionsByAccountId(accountId, userId);
       const uiTransactions = firestoreTransactions.map(mapFirestoreTransactionToUI);
       setTransactions(uiTransactions);
 
@@ -134,41 +185,40 @@ export default function RecentTransactionsTableCard() {
       });
       setFormattedDates(newFormattedDates);
 
-      const selectedAccountName = MOCK_ACCOUNTS.find(acc => acc.id === accountId)?.name || 'Selected Account';
-      if (firestoreTransactions.length > 0) {
-        toast({
-          title: "Transactions Loaded",
-          description: `Displaying transactions for ${selectedAccountName}.`,
-        });
-      } else {
-        toast({
+      const selectedAccountName = accounts.find(acc => acc.id === accountId)?.name || 'Selected Account';
+      if (uiTransactions.length === 0) {
+         toast({
           title: "No Transactions",
-          description: `No transactions found for ${selectedAccountName} for your account. You can add some using the button.`,
+          description: `No transactions found for ${selectedAccountName}. You can add some using the button.`,
           variant: "default"
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch transactions:", error);
       toast({
         title: "Error Loading Transactions",
-        description: "Could not fetch transactions. Please check server logs for details (e.g., Firestore permissions or missing indexes).",
+        description: error.message || "Could not fetch transactions for the selected account.",
         variant: "destructive",
       });
       setTransactions([]);
       setFormattedDates({});
     } finally {
-      setIsLoading(false);
+      setIsLoadingTransactions(false);
     }
-  }, [toast, currentUser]);
+  }, [toast, accounts]); // Added accounts to dependency
 
   useEffect(() => {
-    if (currentUser && selectedAccountId) { // Only fetch if user is logged in and account is selected
-        fetchTransactions(selectedAccountId);
-    } else if (!currentUser) {
-        setTransactions([]); // Clear transactions if user logs out or is not logged in
+    if (currentUser && selectedAccountId) {
+        fetchTransactions(selectedAccountId, currentUser.uid);
+    } else {
+        setTransactions([]);
         setFormattedDates({});
+        if(currentUser && accounts.length > 0 && !selectedAccountId) {
+          // Case where accounts loaded, but none is selected yet (e.g. default selection failed)
+          // setSelectedAccountId(accounts[0].id); // Re-attempt to select first account
+        }
     }
-  }, [selectedAccountId, fetchTransactions, currentUser]);
+  }, [selectedAccountId, currentUser, fetchTransactions, accounts]);
 
   const handleAccountChange = (accountId: string) => {
     setSelectedAccountId(accountId);
@@ -191,7 +241,7 @@ export default function RecentTransactionsTableCard() {
     const transactionDate = `${year}-${month}-${day}`;
 
     const newTransactionData: Omit<TransactionFirestore, 'id'> = {
-      userId: currentUser.uid, // Add userId
+      userId: currentUser.uid,
       accountId: selectedAccountId,
       date: transactionDate,
       description: "Sample Online Purchase",
@@ -201,18 +251,38 @@ export default function RecentTransactionsTableCard() {
       iconName: "ShoppingCart",
     };
     try {
-      setIsLoading(true);
+      setIsLoadingTransactions(true); // Also set loading for transactions
       await addTransaction(newTransactionData);
-      toast({ title: "Transaction Added", description: "Sample transaction successfully added to Firestore." });
-      await fetchTransactions(selectedAccountId);
-    } catch (error) {
-      toast({ title: "Error Adding Transaction", description: "Could not add sample transaction.", variant: "destructive" });
+      toast({ title: "Transaction Added", description: "Sample transaction successfully added." });
+      await fetchTransactions(selectedAccountId, currentUser.uid); // Refresh transactions
+    } catch (error: any) {
+      toast({ title: "Error Adding Transaction", description: error.message || "Could not add sample transaction.", variant: "destructive" });
       console.error("Error adding sample transaction:", error);
     } finally {
-      setIsLoading(false);
+      // setIsLoadingTransactions will be handled by fetchTransactions
     }
   };
 
+  const handleAddNewAccount = () => {
+    toast({
+        title: "Feature Coming Soon!",
+        description: "The ability to add new financial accounts is under development.",
+    });
+    // For testing, you could add a mock account to Firestore here:
+    // if (currentUser) {
+    //   addAccount({
+    //     userId: currentUser.uid,
+    //     name: "Test Savings " + Math.floor(Math.random() * 1000),
+    //     type: "Savings",
+    //     iconName: "PiggyBank",
+    //   }).then(() => {
+    //     toast({ title: "Sample Account Added", description: "Refreshing account list..."});
+    //     fetchAccounts(currentUser.uid);
+    //   }).catch(err => {
+    //      toast({ title: "Error Adding Sample Account", description: err.message, variant: "destructive" });
+    //   });
+    // }
+  };
 
   return (
     <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -223,32 +293,42 @@ export default function RecentTransactionsTableCard() {
             <CardTitle>Recent Transactions</CardTitle>
           </div>
           <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2 items-center">
-            <Select onValueChange={handleAccountChange} defaultValue={selectedAccountId} disabled={!currentUser || isLoading}>
-              <SelectTrigger className="w-full sm:w-[280px]">
-                <SelectValue placeholder="Select an account" />
-              </SelectTrigger>
-              <SelectContent>
-                {MOCK_ACCOUNTS.map(account => (
-                  <SelectItem key={account.id} value={account.id}>
-                    <div className="flex items-center gap-2">
-                      <account.icon className="h-4 w-4 text-muted-foreground" />
-                      {account.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={handleAddSampleTransaction} variant="outline" className="w-full sm:w-auto" disabled={!currentUser || isLoading}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Sample Tx
+            {isLoadingAccounts ? (
+              <div className="flex items-center justify-center w-full sm:w-[280px] h-10">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <span className="ml-2 text-sm text-muted-foreground">Loading accounts...</span>
+              </div>
+            ) : (
+              <Select onValueChange={handleAccountChange} value={selectedAccountId} disabled={!currentUser || accounts.length === 0 || isLoadingTransactions}>
+                <SelectTrigger className="w-full sm:w-[280px]" aria-label="Select Account">
+                  <SelectValue placeholder="Select an account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.length === 0 && <SelectItem value="no-accounts" disabled>No accounts found</SelectItem>}
+                  {accounts.map(account => (
+                    <SelectItem key={account.id} value={account.id}>
+                      <div className="flex items-center gap-2">
+                        <account.icon className="h-4 w-4 text-muted-foreground" />
+                        {account.name} ({account.type})
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button onClick={handleAddNewAccount} variant="outline" className="w-full sm:w-auto" disabled={!currentUser || isLoadingAccounts}>
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Account
             </Button>
           </div>
         </div>
         <CardDescription className="mt-2">
-          {!currentUser ? "Please log in to view your transactions." : `Your latest financial activities for the selected account (from Firestore).`}
+          {!currentUser ? "Please log in to view your transactions." : 
+           accounts.length === 0 && !isLoadingAccounts ? "Add an account to start tracking transactions." :
+           `Your latest financial activities for the selected account.`}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
+        {isLoadingTransactions ? (
           <div className="flex items-center justify-center h-[200px]">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="ml-2">Loading transactions...</p>
@@ -256,6 +336,10 @@ export default function RecentTransactionsTableCard() {
         ) : !currentUser ? (
            <div className="flex items-center justify-center h-[200px]">
              <p className="text-muted-foreground">Login to see your transactions.</p>
+           </div>
+        ) : !selectedAccountId && accounts.length > 0 ? (
+            <div className="flex items-center justify-center h-[200px]">
+             <p className="text-muted-foreground">Please select an account to view transactions.</p>
            </div>
         ) : (
           <ScrollArea className="h-[300px]">
@@ -273,7 +357,13 @@ export default function RecentTransactionsTableCard() {
                 {transactions.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-muted-foreground h-24">
-                      No transactions found for this account, or add some using the button above.
+                      {accounts.length === 0 && !isLoadingAccounts ? "No accounts available." :
+                       !selectedAccountId && !isLoadingAccounts ? "Select an account to see transactions." :
+                       "No transactions found for this account."}
+                       <br/>
+                       {currentUser && selectedAccountId && <Button onClick={handleAddSampleTransaction} variant="link" size="sm" className="mt-2" disabled={isLoadingTransactions}>
+                            <PlusCircle className="mr-1 h-3 w-3" /> Add Sample Transaction
+                        </Button>}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -307,6 +397,15 @@ export default function RecentTransactionsTableCard() {
                     </TableRow>
                   )})
                 )}
+                 {transactions.length > 0 && currentUser && selectedAccountId && (
+                    <TableRow>
+                        <TableCell colSpan={5} className="text-center">
+                             <Button onClick={handleAddSampleTransaction} variant="outline" size="sm" className="w-full sm:w-auto" disabled={isLoadingTransactions}>
+                                <PlusCircle className="mr-2 h-4 w-4" /> Add Sample Transaction to Selected Account
+                            </Button>
+                        </TableCell>
+                    </TableRow>
+                 )}
               </TableBody>
             </Table>
           </ScrollArea>
@@ -315,4 +414,3 @@ export default function RecentTransactionsTableCard() {
     </Card>
   );
 }
-

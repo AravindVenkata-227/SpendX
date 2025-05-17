@@ -66,3 +66,19 @@ export interface MonthlySummary {
   totalExpenses: number;
   netSavings: number;
 }
+
+// Represents a financial account as stored in Firestore
+export interface Account {
+  id: string;
+  userId: string;
+  name: string; // e.g., "Primary Savings", "Salary Account"
+  type: string; // e.g., "Savings", "Checking", "Credit Card"
+  iconName: string; // Name of the Lucide icon
+  // balance?: number; // Optional: Current balance, can be complex to maintain
+  createdAt: Timestamp;
+}
+
+// Account type for UI display (includes actual icon component)
+export interface UIAccount extends Omit<Account, 'iconName' | 'createdAt'> {
+  icon: LucideIcon;
+}

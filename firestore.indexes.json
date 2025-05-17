@@ -60,6 +60,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name", // For ordering accounts by name
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -7,19 +7,25 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { KeyRound, Mail, Lock, Wallet } from 'lucide-react';
+import { User, Mail, Lock, Wallet, Users } from 'lucide-react';
 
-export default function LoginPage() {
+export default function SignupPage() {
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const router = useRouter();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock login logic
-    console.log('Login attempt with:', { email, password });
-    // Redirect to dashboard page after mock login
-    router.push('/');
+    if (password !== confirmPassword) {
+      alert("Passwords don't match!"); // Simple validation for now
+      return;
+    }
+    // Mock signup logic
+    console.log('Signup attempt with:', { fullName, email, password });
+    // Redirect to login page after mock signup
+    router.push('/login');
   };
 
   return (
@@ -28,18 +34,33 @@ export default function LoginPage() {
         <Wallet className="h-8 w-8" />
         <span>FinTrack AI</span>
       </div>
-      <Card className="w-full max-w-sm shadow-2xl">
+      <Card className="w-full max-w-md shadow-2xl"> {/* Increased max-width for more fields */}
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-2">
-            <KeyRound className="h-8 w-8 text-primary" />
+            <Users className="h-8 w-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl text-center">Welcome Back</CardTitle>
+          <CardTitle className="text-2xl text-center">Create an Account</CardTitle>
           <CardDescription className="text-center">
-            Enter your credentials to access your dashboard.
+            Join FinTrack AI to manage your finances smartly.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Full Name</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="fullName"
+                  type="text"
+                  placeholder="John Doe"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                  className="pl-10"
+                />
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <div className="relative">
@@ -56,20 +77,7 @@ export default function LoginPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <a
-                  href="#"
-                  className="text-xs text-primary hover:underline"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    // Placeholder for forgot password logic
-                    console.log('Forgot password clicked');
-                  }}
-                >
-                  Forgot password?
-                </a>
-              </div>
+              <Label htmlFor="password">Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -83,28 +91,43 @@ export default function LoginPage() {
                 />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  className="pl-10"
+                />
+              </div>
+            </div>
           </CardContent>
           <CardFooter className="flex flex-col">
             <Button type="submit" className="w-full">
-              Login
+              Create Account
             </Button>
             <p className="mt-4 text-xs text-center text-muted-foreground">
-              Don't have an account?{' '}
+              Already have an account?{' '}
               <a
-                href="/signup"
+                href="/login"
                 className="underline hover:text-primary"
                 onClick={(e) => {
                   e.preventDefault();
-                  router.push('/signup');
+                  router.push('/login');
                 }}
               >
-                Sign up
+                Login
               </a>
             </p>
           </CardFooter>
         </form>
       </Card>
-       <footer className="py-6 px-4 md:px-6 mt-8">
+      <footer className="py-6 px-4 md:px-6 mt-8">
         <p className="text-center text-sm text-muted-foreground">
           © {new Date().getFullYear()} FinTrack AI. All rights reserved.
         </p>

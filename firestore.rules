@@ -1,54 +1,43 @@
 
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Transactions: Users can only read/write/delete their own transactions.
+    match /transactions/{transactionId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
 
-    // Users Collection:
-    // - Anyone can create their own user profile (typically on signup).
-    // - Users can only read their own profile.
-    // - Users can only update their own profile, and cannot change their email, original ID or creation timestamp.
+    // Goals: Users can only manage their own goals.
+    match /goals/{goalId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Accounts: Users can only manage their own accounts.
+    match /accounts/{accountId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
+
+    // User Profiles:
+    // Users can read their own profile.
+    // Users can create their own profile.
+    // Users can update their own profile, but cannot change their email, ID, or creation timestamp.
     match /users/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null && request.auth.uid == userId;
-      // Allow update if the user is authenticated, owns the profile,
-      // AND they are not trying to change their email, original ID, or creation timestamp.
-      // Other fields like fullName, photoURL, notificationPreferences can be updated.
+      // Allow update if the user is authenticated and owns the profile,
+      // AND the update operation itself is not trying to change 'id', 'email', or 'createdAt'.
+      // This implicitly allows changes to other fields like 'fullName', 'photoURL', 'notificationPreferences'.
       allow update: if request.auth != null &&
                        request.auth.uid == userId &&
-                       request.resource.data.id == resource.data.id && 
-                       request.resource.data.email == resource.data.email &&
-                       request.resource.data.createdAt.toMillis() == resource.data.createdAt.toMillis();
-      // Generally, users should not be able to delete their own profiles directly through client SDK
-      // This should be handled by a backend process if needed, e.g., for GDPR.
-      allow delete: if false; 
-    }
-
-    // Transactions Collection:
-    // - Users can only manage their own transactions.
-    match /transactions/{transactionId} {
-      allow read, write, update, delete: if request.auth != null && 
-                                      resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && 
-                       request.resource.data.userId == request.auth.uid;
-    }
-
-    // Goals Collection:
-    // - Users can only manage their own goals.
-    match /goals/{goalId} {
-      allow read, write, update, delete: if request.auth != null && 
-                                   resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && 
-                       request.resource.data.userId == request.auth.uid;
-    }
-    
-    // Accounts Collection:
-    // - Users can only manage their own accounts.
-    match /accounts/{accountId} {
-      allow read, write, update, delete: if request.auth != null && 
-                                   resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && 
-                       request.resource.data.userId == request.auth.uid;
+                       // Check if 'id' is being changed (it shouldn't be in the update payload)
+                       (request.resource.data.id == resource.data.id) &&
+                       // Check if 'email' is being changed
+                       (request.resource.data.email == resource.data.email) &&
+                       // Check if 'createdAt' is being changed
+                       (request.resource.data.createdAt == resource.data.createdAt);
     }
   }
 }

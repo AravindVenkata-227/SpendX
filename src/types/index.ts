@@ -77,6 +77,7 @@ export interface NotificationPreferences {
   onOverspending: boolean;
   onLargeTransactions: boolean;
   onSavingsOpportunities: boolean;
+  emailForAISuggestions?: boolean; // Added for AI insight emails
 }
 
 // Represents a user profile as stored in Firestore

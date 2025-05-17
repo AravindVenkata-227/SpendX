@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { ChevronLeft, UserCircle, Bell, Palette, Loader2, Sun, Moon, Laptop, Sparkles, MessageSquareQuote, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, UserCircle, Bell, Palette, Loader2, Sun, Moon, Laptop, Sparkles, MessageSquareQuote, AlertTriangle, Mail } from 'lucide-react';
 import { getUserProfile, updateUserProfile, type UserProfile, type NotificationPreferences } from '@/services/userService';
 import { useToast } from '@/hooks/use-toast';
 
@@ -23,6 +23,7 @@ const defaultNotificationPrefs: NotificationPreferences = {
   onOverspending: true,
   onLargeTransactions: true,
   onSavingsOpportunities: true,
+  emailForAISuggestions: false,
 };
 
 
@@ -91,15 +92,13 @@ export default function SettingsPage() {
       if (profile?.notificationPreferences) {
         setNotificationPrefs(profile.notificationPreferences);
       } else {
-        // If profile exists but prefs don't, still set to default to ensure UI consistency
-        // This could happen if prefs were not added at user creation for older users
-        setNotificationPrefs(defaultNotificationPrefs);
+        setNotificationPrefs(defaultNotificationPreferences);
       }
     } catch (error) {
       console.error("Error fetching profile in settings:", error);
       toast({ title: "Error Loading Profile", description: "Could not load profile settings.", variant: "destructive" });
-      setUserProfile(null); // Ensure profile is null on error
-      setNotificationPrefs(defaultNotificationPrefs); // Reset to defaults
+      setUserProfile(null); 
+      setNotificationPrefs(defaultNotificationPreferences); 
     } finally {
       setIsLoadingProfile(false);
     }
@@ -127,22 +126,20 @@ export default function SettingsPage() {
         toast({ title: "Authentication Error", description: "You must be logged in to change preferences.", variant: "destructive" });
         return;
     }
-    // Check if profile is loaded. If still loading, perhaps wait or disable action.
-    // If not loading and profile is null, it means fetch failed or no profile.
+    
     if (!isLoadingProfile && !userProfile) {
         toast({ 
             title: "Profile Data Missing", 
-            description: "Your user profile could not be loaded. Preferences cannot be saved at this time.", 
+            description: "Your user profile could not be loaded. Preferences cannot be saved at this time. Please log out and back in, or contact support if the issue persists.", 
             variant: "destructive" 
         });
-        // Optionally revert the switch UI state if desired, though re-fetching on error does this
-        await fetchProfileForSettings(currentUser); // Attempt to re-fetch to reset UI
+        if (currentUser) await fetchProfileForSettings(currentUser); 
         return;
     }
 
 
     const updatedPrefs = { ...notificationPrefs, [prefKey]: value };
-    setNotificationPrefs(updatedPrefs); // Optimistic update
+    setNotificationPrefs(updatedPrefs); 
 
     try {
       await updateUserProfile(currentUser.uid, { notificationPreferences: updatedPrefs });
@@ -150,11 +147,11 @@ export default function SettingsPage() {
     } catch (error: any) {
       console.error("Error updating notification preferences:", error);
       let description = error.message || "Could not save notification preferences. Please try again.";
-      // Check for specific error message content from userService
+      
       if (error.message && error.message.includes("No document to update")) {
           description = "Your user profile document was not found. Cannot save preferences. Please try logging out and back in, or contact support if this persists.";
       } else if (error.message && error.message.toLowerCase().includes('permission denied')) {
-        description = "Permission Denied: Could not save preferences. Please ensure Firestore rules are deployed correctly and allow updates to 'notificationPreferences'.";
+        description = "Permission Denied: Could not save preferences. Ensure Firestore rules are deployed correctly and allow updates to 'notificationPreferences'.";
       }
       
       toast({
@@ -163,7 +160,6 @@ export default function SettingsPage() {
         variant: "destructive",
       });
       
-      // Revert optimistic UI update by re-fetching profile data
       if (currentUser) {
         await fetchProfileForSettings(currentUser);
       }
@@ -239,9 +235,9 @@ export default function SettingsPage() {
                 <>
                   <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
                     <Label htmlFor="overspending-alerts" className="flex flex-col space-y-1">
-                      <span>Overspending Alerts</span>
+                      <span>Overspending Alerts (Toast)</span>
                       <span className="font-normal leading-snug text-muted-foreground">
-                        Get notified about significant overspending in categories.
+                        Get toast notifications about significant overspending.
                       </span>
                     </Label>
                     <Switch
@@ -254,9 +250,9 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
                     <Label htmlFor="large-transaction-alerts" className="flex flex-col space-y-1">
-                      <span>Large Transaction Alerts</span>
+                      <span>Large Transaction Alerts (Toast)</span>
                       <span className="font-normal leading-snug text-muted-foreground">
-                        Receive alerts for unusually large transactions.
+                        Receive toast alerts for unusually large transactions.
                       </span>
                     </Label>
                     <Switch
@@ -269,9 +265,9 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
                     <Label htmlFor="savings-opportunity-alerts" className="flex flex-col space-y-1">
-                      <span>Savings Opportunity Alerts</span>
+                      <span>Savings Opportunity Alerts (Toast)</span>
                       <span className="font-normal leading-snug text-muted-foreground">
-                        Get insights on potential savings opportunities.
+                        Get toast insights on potential savings opportunities.
                       </span>
                     </Label>
                     <Switch
@@ -279,6 +275,21 @@ export default function SettingsPage() {
                       checked={notificationPrefs.onSavingsOpportunities}
                       onCheckedChange={(checked) => handleNotificationPrefChange('onSavingsOpportunities', checked)}
                       aria-label="Toggle savings opportunity alerts"
+                      disabled={!userProfile || isLoadingProfile}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
+                    <Label htmlFor="email-ai-suggestions" className="flex flex-col space-y-1">
+                      <span>Email AI-Generated Insights</span>
+                      <span className="font-normal leading-snug text-muted-foreground">
+                        Receive important AI insights via email (simulation only).
+                      </span>
+                    </Label>
+                    <Switch
+                      id="email-ai-suggestions"
+                      checked={notificationPrefs.emailForAISuggestions ?? false}
+                      onCheckedChange={(checked) => handleNotificationPrefChange('emailForAISuggestions', checked)}
+                      aria-label="Toggle email AI suggestions"
                       disabled={!userProfile || isLoadingProfile}
                     />
                   </div>

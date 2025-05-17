@@ -7,6 +7,7 @@ const defaultNotificationPreferences: NotificationPreferences = {
   onOverspending: true,
   onLargeTransactions: true,
   onSavingsOpportunities: true,
+  emailForAISuggestions: false, // Default to false
 };
 
 /**
@@ -97,7 +98,8 @@ export async function updateUserProfile(userId: string, data: UserProfileUpdateD
     if (e.code === 'permission-denied') {
         throw new Error("Permission denied. You may not have the rights to update this profile, or some fields are restricted by Firestore rules.");
     }
-    throw new Error("Could not update user profile. Please check server logs.");
+    // Pass the original Firebase error message for better debugging on the client
+    throw new Error(e.message || "Could not update user profile. Please check server logs for the original error.");
   }
 }
 

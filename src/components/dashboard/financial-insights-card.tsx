@@ -24,6 +24,7 @@ const defaultNotificationPrefs: NotificationPreferences = {
   onOverspending: true,
   onLargeTransactions: true,
   onSavingsOpportunities: true,
+  emailForAISuggestions: false,
 };
 
 export default function FinancialInsightsCard() {
@@ -43,7 +44,7 @@ export default function FinancialInsightsCard() {
           setUserProfile(profile);
         } catch (error) {
           console.error("Error fetching profile for insights card:", error);
-          setUserProfile(null); // Ensure profile is null on error
+          setUserProfile(null); 
         }
       } else {
         setUserProfile(null);
@@ -81,10 +82,11 @@ export default function FinancialInsightsCard() {
       return "User notification preferences not available or not set. Using default considerations.";
     }
     let prefString = "User preferences for notifications:\n";
-    prefString += `- Overspending alerts: ${prefs.onOverspending ? 'Enabled' : 'Disabled'}\n`;
-    prefString += `- Large transaction alerts: ${prefs.onLargeTransactions ? 'Enabled' : 'Disabled'}\n`;
-    prefString += `- Savings opportunity alerts: ${prefs.onSavingsOpportunities ? 'Enabled' : 'Disabled'}\n`;
-    prefString += "Consider these preferences when deciding to send a notification.";
+    prefString += `- Toast for Overspending alerts: ${prefs.onOverspending ? 'Enabled' : 'Disabled'}\n`;
+    prefString += `- Toast for Large transaction alerts: ${prefs.onLargeTransactions ? 'Enabled' : 'Disabled'}\n`;
+    prefString += `- Toast for Savings opportunity alerts: ${prefs.onSavingsOpportunities ? 'Enabled' : 'Disabled'}\n`;
+    prefString += `- Email for important AI suggestions: ${prefs.emailForAISuggestions ? 'Enabled' : 'Disabled'}\n`;
+    prefString += "Consider these preferences when deciding to send a notification (toast or email).";
     return prefString;
   };
 
@@ -102,16 +104,15 @@ export default function FinancialInsightsCard() {
     setIsLoading(true);
     setInsightResult(null);
     
-    // Fetch fresh profile data, in case preferences changed in another tab/window
     let currentPrefs = defaultNotificationPrefs;
     try {
         const freshProfile = await getUserProfile(currentUser.uid);
+        setUserProfile(freshProfile); // Update local profile state
         if (freshProfile?.notificationPreferences) {
             currentPrefs = freshProfile.notificationPreferences;
         }
     } catch (profileError) {
         console.error("Could not fetch latest profile for insight generation:", profileError);
-        // Proceed with defaults or cached profile prefs if available
         currentPrefs = userProfile?.notificationPreferences || defaultNotificationPrefs;
     }
     
@@ -135,8 +136,19 @@ export default function FinancialInsightsCard() {
           title: 'New Financial Insight!',
           description: result.insight,
           variant: 'default',
-          duration: 7000, // Longer duration for important insights
+          duration: 7000, 
         });
+
+        // Check user's preference for receiving AI suggestion emails
+        if (userProfile?.notificationPreferences?.emailForAISuggestions && currentUser.email) {
+            console.log(`SIMULATING EMAIL: Would send insight to user ${currentUser.email}: "${result.insight}"`);
+            toast({
+                title: 'Email Simulation',
+                description: `An email with this insight would be sent to ${currentUser.email}. (This is a simulation for demonstration purposes)`,
+                variant: 'default',
+                duration: 8000,
+            });
+        }
       }
     } catch (error: any) {
       console.error('Error generating insight:', error);
@@ -192,7 +204,7 @@ export default function FinancialInsightsCard() {
             <p className="text-sm font-semibold">Latest Insight:</p>
             <p className="text-sm text-foreground">{insightResult.insight}</p>
             {insightResult.sendNotification && (
-                <p className="text-xs text-accent mt-2">A notification for this insight was triggered based on your preferences.</p>
+                <p className="text-xs text-accent mt-2">A toast notification for this insight was triggered based on your preferences.</p>
             )}
           </div>
         )}

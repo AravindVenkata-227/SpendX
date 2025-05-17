@@ -110,3 +110,6 @@ export const TransactionCategories = [
   "Entertainment", "Health", "Education", "Income", "Investment", "Travel", "Gifts", "Other"
 ] as const;
 export type TransactionCategory = typeof TransactionCategories[number];
+
+// Data for updating a goal, excluding non-updatable fields
+export type GoalUpdateData = Partial<Omit<Goal, 'id' | 'userId' | 'createdAt'>>;

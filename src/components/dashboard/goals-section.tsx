@@ -3,32 +3,34 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import GoalProgressItemCard, { AddGoalCard } from "@/components/dashboard/goal-progress-item-card";
-import AddGoalDialog from "@/components/dashboard/add-goal-dialog"; // Import the new dialog
+import AddGoalDialog from "@/components/dashboard/add-goal-dialog";
+import EditGoalDialog from "@/components/dashboard/edit-goal-dialog"; // Import EditGoalDialog
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"; // Import AlertDialog components
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { UIGoal, Goal as FirestoreGoal, GoalIcons as GoalIconTypes } from "@/types";
-import { getGoalsByUserId } from '@/services/goalService';
+import type { UIGoal, Goal as FirestoreGoal } from "@/types";
+import { getGoalsByUserId, deleteGoal } from '@/services/goalService';
 import { auth } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Plane, Smartphone, ShieldAlert, Target, Home, BookOpen, Car, Loader2, ShoppingBag, Gift, ShieldCheck } from "lucide-react";
+import { Plane, Smartphone, Target, Home, BookOpen, Car, Loader2, ShoppingBag, Gift, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-// Mapping for icon names to Lucide components
 const goalIconComponents: { [key: string]: React.ElementType } = {
-  Plane,
-  Smartphone,
-  ShieldAlert, // Kept for backward compatibility if any data uses it
-  ShieldCheck, // Preferred for Savings/Emergency
-  Home,
-  BookOpen,
-  Car,
-  ShoppingBag,
-  Gift,
-  Target, // Fallback icon
+  Plane, Smartphone, ShieldCheck, Home, BookOpen, Car, ShoppingBag, Gift, Target,
+  // Ensure "ShieldAlert" is mapped if it was ever used or might be in old data
+  ShieldAlert: ShieldCheck, 
 };
 
 const mapFirestoreGoalToUIGoal = (firestoreGoal: FirestoreGoal): UIGoal => {
-  // Use ShieldCheck if iconName is ShieldAlert, otherwise use the specified icon or default to Target
   const iconKey = firestoreGoal.iconName === "ShieldAlert" ? "ShieldCheck" : firestoreGoal.iconName;
   const IconComponent = goalIconComponents[iconKey] || goalIconComponents.Target;
   return {
@@ -38,10 +40,9 @@ const mapFirestoreGoalToUIGoal = (firestoreGoal: FirestoreGoal): UIGoal => {
     targetAmount: firestoreGoal.targetAmount,
     savedAmount: firestoreGoal.savedAmount,
     icon: IconComponent,
-    createdAt: firestoreGoal.createdAt, // Keep as Timestamp
+    createdAt: firestoreGoal.createdAt,
   };
 };
-
 
 export default function GoalsSection() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -49,6 +50,10 @@ export default function GoalsSection() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasShownNoGoalsToast, setHasShownNoGoalsToast] = useState(false);
   const [isAddGoalDialogOpen, setIsAddGoalDialogOpen] = useState(false);
+  const [isEditGoalDialogOpen, setIsEditGoalDialogOpen] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<UIGoal | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [goalToDeleteId, setGoalToDeleteId] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -62,10 +67,6 @@ export default function GoalsSection() {
     });
     return () => unsubscribe();
   }, []);
-
-  useEffect(() => {
-    setHasShownNoGoalsToast(false);
-  }, [currentUser]);
 
   const fetchGoals = useCallback(async (userId: string) => {
     setIsLoading(true);
@@ -89,6 +90,7 @@ export default function GoalsSection() {
   useEffect(() => {
     if (currentUser) {
       fetchGoals(currentUser.uid);
+      setHasShownNoGoalsToast(false); // Reset toast flag when user changes or logs in
     } else {
       setIsLoading(false);
       setGoals([]);
@@ -110,21 +112,41 @@ export default function GoalsSection() {
     if (currentUser) {
       setIsAddGoalDialogOpen(true);
     } else {
-      toast({
-        title: "Login Required",
-        description: "Please log in to add a new goal.",
-        variant: "destructive"
-      });
+      toast({ title: "Login Required", description: "Please log in to add a new goal.", variant: "destructive" });
     }
   };
 
-  const handleGoalAdded = () => {
+  const handleGoalAddedOrUpdated = () => {
     if (currentUser) {
-      fetchGoals(currentUser.uid); // Refresh goals list
-      setHasShownNoGoalsToast(false); // Allow no goals toast to show again if list becomes empty
+      fetchGoals(currentUser.uid);
+      setHasShownNoGoalsToast(false);
     }
   };
 
+  const handleEditGoal = (goal: UIGoal) => {
+    setEditingGoal(goal);
+    setIsEditGoalDialogOpen(true);
+  };
+
+  const handleDeleteGoalClick = (goalId: string) => {
+    setGoalToDeleteId(goalId);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteGoal = async () => {
+    if (!currentUser || !goalToDeleteId) return;
+    try {
+      await deleteGoal(goalToDeleteId, currentUser.uid);
+      toast({ title: "Success", description: "Goal deleted successfully." });
+      handleGoalAddedOrUpdated(); // Re-fetch goals
+    } catch (error: any) {
+      console.error("Error deleting goal:", error);
+      toast({ title: "Error", description: error.message || "Could not delete goal.", variant: "destructive" });
+    } finally {
+      setIsDeleteConfirmOpen(false);
+      setGoalToDeleteId(null);
+    }
+  };
 
   return (
     <>
@@ -148,27 +170,63 @@ export default function GoalsSection() {
           ) : (
             <div className="space-y-4">
               {goals.length > 0 ? (
-                  goals.map((goal) => (
-                  <GoalProgressItemCard key={goal.id} goal={goal} />
-                  ))
+                goals.map((goal) => (
+                  <GoalProgressItemCard 
+                    key={goal.id} 
+                    goal={goal} 
+                    onEdit={handleEditGoal} 
+                    onDelete={handleDeleteGoalClick}
+                  />
+                ))
               ) : (
-                  <p className="text-center text-muted-foreground py-4">No goals set yet. Click below to add one!</p>
+                <p className="text-center text-muted-foreground py-4">No goals set yet. Click below to add one!</p>
               )}
               <div onClick={handleAddGoalClick} className="cursor-pointer">
-                  <AddGoalCard />
+                <AddGoalCard />
               </div>
             </div>
           )}
         </CardContent>
       </Card>
+
       {currentUser && (
         <AddGoalDialog
           currentUser={currentUser}
           open={isAddGoalDialogOpen}
           onOpenChange={setIsAddGoalDialogOpen}
-          onGoalAdded={handleGoalAdded}
+          onGoalAdded={handleGoalAddedOrUpdated}
         />
       )}
+
+      {currentUser && editingGoal && (
+        <EditGoalDialog
+          currentUser={currentUser}
+          goal={editingGoal}
+          open={isEditGoalDialogOpen}
+          onOpenChange={(open) => {
+            setIsEditGoalDialogOpen(open);
+            if (!open) setEditingGoal(null); // Clear editing goal when dialog closes
+          }}
+          onGoalUpdated={handleGoalAddedOrUpdated}
+        />
+      )}
+
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete your savings goal.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setGoalToDeleteId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteGoal} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Yes, delete goal
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

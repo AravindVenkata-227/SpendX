@@ -95,9 +95,11 @@ export default function Header() {
           <Button variant="ghost" size="icon" aria-label="Notifications" disabled={isLoggingOut || isLoadingAuth}>
             <Bell className="h-5 w-5" />
           </Button>
-          <Button variant="ghost" size="icon" aria-label="Settings" disabled={isLoggingOut || isLoadingAuth}>
-            <Settings className="h-5 w-5" />
-          </Button>
+          <Link href="/settings" passHref legacyBehavior>
+            <Button variant="ghost" size="icon" aria-label="Settings" disabled={isLoggingOut || isLoadingAuth}>
+              <Settings className="h-5 w-5" />
+            </Button>
+          </Link>
           
           {isLoadingAuth ? (
             <Loader2 className="h-6 w-6 animate-spin" />
@@ -107,7 +109,7 @@ export default function Header() {
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                   <Avatar className="h-8 w-8">
                     <AvatarImage 
-                      src={`https://placehold.co/40x40.png?text=${getInitials(userProfile?.fullName, currentUser.email)}`} 
+                      src={userProfile?.photoURL || `https://placehold.co/40x40.png?text=${getInitials(userProfile?.fullName, currentUser.email)}`}
                       alt={userProfile?.fullName || currentUser.email || "User Avatar"}
                       data-ai-hint="user avatar"
                     />

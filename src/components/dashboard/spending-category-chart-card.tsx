@@ -1,4 +1,5 @@
 "use client";
+import * as React from "react";
 import { TrendingUp } from "lucide-react";
 import { Pie, PieChart, Cell } from "recharts";
 import {
@@ -81,7 +82,7 @@ export default function SpendingCategoryChartCard() {
           Trending up by 5% this month <TrendingUp className="h-4 w-4" />
         </div>
         <div className="leading-none text-muted-foreground">
-          Showing total spending for the current month
+          Showing total spending for the current month (Total: ₹{totalValue.toLocaleString()})
         </div>
       </CardFooter>
     </Card>

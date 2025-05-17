@@ -56,7 +56,20 @@ export default function LoginPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <a
+                  href="#"
+                  className="text-xs text-primary hover:underline"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    // Placeholder for forgot password logic
+                    console.log('Forgot password clicked');
+                  }}
+                >
+                  Forgot password?
+                </a>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -77,7 +90,13 @@ export default function LoginPage() {
             </Button>
             <p className="mt-4 text-xs text-center text-muted-foreground">
               Don't have an account?{' '}
-              <a href="#" className="underline hover:text-primary">
+              <a href="#" className="underline hover:text-primary"
+                onClick={(e) => {
+                    e.preventDefault();
+                    // Placeholder for sign up logic
+                    console.log('Sign up clicked');
+                  }}
+              >
                 Sign up
               </a>
             </p>

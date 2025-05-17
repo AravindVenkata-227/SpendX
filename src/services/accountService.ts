@@ -1,7 +1,7 @@
 
 import { db } from '@/lib/firebase';
 import type { Account, AccountType, AccountUpdateData } from '@/types';
-import { collection, addDoc, getDocs, query, where, orderBy, serverTimestamp, Timestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, orderBy, serverTimestamp, Timestamp, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 
 /**
  * Adds a new account to Firestore for the authenticated user.
@@ -20,6 +20,7 @@ export async function addAccount(accountData: Omit<Account, 'id' | 'createdAt'>)
 
   const dataToSave: any = {
     ...accountData,
+    accountNumberLast4: accountData.accountNumberLast4, // Ensure it's explicitly included
     createdAt: serverTimestamp(),
   };
 
@@ -62,11 +63,10 @@ export async function getAccountsByUserId(userId: string): Promise<Account[]> {
         iconName: data.iconName,
         accountNumberLast4: data.accountNumberLast4, // Will always be a string now
         createdAt: data.createdAt as Timestamp,
-      } as Account); 
+      } as Account);
     });
     return accounts;
-  } catch (e: any)
-{
+  } catch (e: any) {
     console.error(`Error fetching accounts for user ${userId}: `, e);
     let detailedMessage = "Could not fetch your accounts. Please try again later.";
     if (e.code === 'permission-denied' || (e.message && e.message.toLowerCase().includes('permission denied'))) {
@@ -98,8 +98,11 @@ export async function updateAccount(accountId: string, userId: string, updateDat
   const accountRef = doc(db, 'accounts', accountId);
   
   const dataToUpdate: any = { ...updateData };
-  // If accountNumberLast4 is provided in updateData, it will be a valid 4-digit string
-  // due to form validation. No special handling for empty string is needed here.
+  // Ensure accountNumberLast4 is explicitly set if present in updateData
+  if (updateData.accountNumberLast4 !== undefined) {
+    dataToUpdate.accountNumberLast4 = updateData.accountNumberLast4;
+  }
+
 
   try {
     // Firestore rules should handle ownership verification (userId must match doc's userId)
@@ -113,6 +116,7 @@ export async function updateAccount(accountId: string, userId: string, updateDat
 
 /**
  * Deletes an account from Firestore.
+ * Before deleting the account, it re-categorizes all associated transactions to "Other".
  * @param accountId - The ID of the account to delete.
  * @param userId - The ID of the user making the deletion (for rule verification).
  */
@@ -125,13 +129,33 @@ export async function deleteAccount(accountId: string, userId: string): Promise<
     console.error("Error deleting account: accountId is missing.");
     throw new Error("Account ID is required to delete an account.");
   }
-  const accountRef = doc(db, 'accounts', accountId);
+
+  const batch = writeBatch(db);
+
   try {
-    // Firestore rules should handle ownership verification
-    await deleteDoc(accountRef);
-    console.log("Account deleted with ID: ", accountId);
+    // 1. Find and update associated transactions
+    const transactionsCol = collection(db, 'transactions');
+    const q = query(transactionsCol, where('accountId', '==', accountId), where('userId', '==', userId));
+    const querySnapshot = await getDocs(q);
+
+    querySnapshot.forEach((transactionDoc) => {
+      const transactionRef = doc(db, 'transactions', transactionDoc.id);
+      batch.update(transactionRef, {
+        category: "Other",
+        iconName: "CircleDollarSign" // Assuming "CircleDollarSign" is the icon for "Other"
+      });
+    });
+
+    // 2. Delete the account
+    const accountRef = doc(db, 'accounts', accountId);
+    batch.delete(accountRef);
+
+    // 3. Commit the batch
+    await batch.commit();
+    console.log("Account deleted and transactions re-categorized for ID: ", accountId);
+
   } catch (e: any) {
-    console.error("Error deleting account: ", e);
-    throw new Error(e.message || "Could not delete account.");
+    console.error("Error deleting account and re-categorizing transactions: ", e);
+    throw new Error(e.message || "Could not delete account or update its transactions.");
   }
 }

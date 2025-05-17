@@ -1,43 +1,36 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // Users collection:
-    // - Allow users to create their own profile (document ID must match their UID)
-    // - Allow users to read and update their own profile
-    // - Disallow deleting profiles for now (can be enabled if needed)
-    // - Disallow listing all users
+    // - Allow users to create their own profile document.
+    // - Allow users to read their own profile.
+    // - Allow users to update their own profile.
+    // - Disallow deleting profiles for now.
     match /users/{userId} {
       allow read, update: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null && request.auth.uid == userId && request.auth.uid == request.resource.data.id;
     }
 
     // Transactions collection:
-    // - Users can only read/write their own transactions.
-    // - The 'userId' field in the transaction document must match the authenticated user's UID.
+    // - Users can only read their own transactions.
+    // - Users can only create transactions for themselves.
+    // - Users can only update/delete their own transactions.
     match /transactions/{transactionId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      // For update, ensure user owns the doc and isn't changing the userId to someone else's
-      allow update: if request.auth != null && 
-                      request.auth.uid == resource.data.userId && 
-                      request.auth.uid == request.resource.data.userId;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.resource.data.userId != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
     }
 
     // Goals collection:
-    // - Users can only read/write their own goals.
-    // - The 'userId' field in the goal document must match the authenticated user's UID.
+    // - Users can only read their own goals.
+    // - Users can only create goals for themselves.
+    // - Users can only update/delete their own goals.
     match /goals/{goalId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      // For update, ensure user owns the doc and isn't changing the userId to someone else's
-      allow update: if request.auth != null && 
-                      request.auth.uid == resource.data.userId &&
-                      request.auth.uid == request.resource.data.userId;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.resource.data.userId != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
     }
   }
 }

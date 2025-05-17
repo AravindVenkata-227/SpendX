@@ -33,9 +33,26 @@ const ForgotPasswordPage: NextPage = () => {
       router.push('/login'); 
     } catch (error: any) {
       console.error('Forgot password error:', error);
+      let errorMessage = "Could not send password reset email. Please try again.";
+      if (error.code === 'auth/user-not-found') {
+        // We typically don't reveal if an email exists or not for security reasons,
+        // so we can use the same generic message as the success case.
+        // Or, if preferred, a slightly different one, but this is a common practice.
+        toast({
+            title: 'Password Reset Link Sent',
+            description: `If an account exists for ${email}, a password reset link has been sent. Please check your inbox.`,
+            variant: 'default',
+        });
+        setEmail('');
+        router.push('/login');
+        // Early return because we don't want to show a generic error toast below in this specific case.
+        return;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
       toast({
         title: "Error Sending Reset Link",
-        description: error.message || "Could not send password reset email. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

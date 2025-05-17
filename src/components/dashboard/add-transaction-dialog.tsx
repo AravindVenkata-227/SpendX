@@ -25,8 +25,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { addTransaction } from '@/services/transactionService';
 import type { User } from 'firebase/auth';
-import { TransactionCategories, type TransactionCategory } from '@/types';
-import { Loader2, PlusCircle, Calendar as CalendarIcon, Utensils, FileText, ShoppingCart, Briefcase, Film, Car, BookOpen, Home, PiggyBank, Landmark, CreditCard, CircleDollarSign, HeartPulse, Building, Gift, Plane, TrendingUp } from 'lucide-react'; // Added Gift, Plane, TrendingUp
+import { TransactionCategories, type TransactionCategory, type UIAccount } from '@/types';
+import { Loader2, PlusCircle, Calendar as CalendarIcon, Utensils, FileText, ShoppingCart, Briefcase, Film, Car, BookOpen, Home, PiggyBank, Landmark, CreditCard, CircleDollarSign, HeartPulse, Building, Gift, Plane, TrendingUp } from 'lucide-react';
 import { format, parse } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -37,7 +37,7 @@ const categoryToIconMap: Record<TransactionCategory, string> = {
   "Utilities": "FileText",
   "Rent/Mortgage": "Home",
   "Transport": "Car",
-  "Shopping": "ShoppingCart", // Changed from ShoppingBag to ShoppingCart
+  "Shopping": "ShoppingCart",
   "Entertainment": "Film",
   "Health": "HeartPulse",
   "Education": "BookOpen",
@@ -60,11 +60,11 @@ const formSchema = z.object({
 interface AddTransactionDialogProps {
   currentUser: User | null;
   selectedAccountId: string | undefined;
-  onTransactionAdded: () => void; // Callback to refresh transactions list
-  accountsExist: boolean;
+  allAccounts: UIAccount[]; // Changed from accountsExist
+  onTransactionAdded: () => void;
 }
 
-export default function AddTransactionDialog({ currentUser, selectedAccountId, onTransactionAdded, accountsExist }: AddTransactionDialogProps) {
+export default function AddTransactionDialog({ currentUser, selectedAccountId, allAccounts, onTransactionAdded }: AddTransactionDialogProps) {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -79,6 +79,9 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, o
       date: new Date(),
     },
   });
+
+  const selectedAccount = allAccounts.find(acc => acc.id === selectedAccountId);
+  const accountDisplayName = selectedAccount ? `${selectedAccount.name} (${selectedAccount.type})` : "the selected account";
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!currentUser) {
@@ -118,7 +121,7 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, o
   };
   
   useEffect(() => {
-    if (open) { // Reset form when dialog opens
+    if (open) {
       form.reset({
         description: '',
         amount: 0,
@@ -135,7 +138,7 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, o
       <DialogTrigger asChild>
         <Button 
           className="w-full sm:w-auto" 
-          disabled={!currentUser || !selectedAccountId || !accountsExist || isLoading}
+          disabled={!currentUser || !selectedAccountId || allAccounts.length === 0 || isLoading}
         >
           <PlusCircle className="mr-2 h-4 w-4" /> Add Transaction
         </Button>
@@ -144,7 +147,7 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, o
         <DialogHeader>
           <DialogTitle>Add New Transaction</DialogTitle>
           <DialogDescription>
-            Enter the details for your new transaction for the selected account.
+            Enter transaction details for {accountDisplayName}.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">

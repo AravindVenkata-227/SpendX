@@ -3,12 +3,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { Transaction as UITransactionType, TransactionFirestore, Account as FirestoreAccount, UIAccount, AccountType } from "@/types";
-import { getTransactionsByAccountId } from '@/services/transactionService'; // addTransaction is now used in its own dialog
+import { getTransactionsByAccountId } from '@/services/transactionService';
 import { getAccountsByUserId } from '@/services/accountService';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import AddAccountDialog from './add-account-dialog'; // Import new dialog
-import AddTransactionDialog from './add-transaction-dialog'; // Import new dialog
+import AddAccountDialog from './add-account-dialog';
+import AddTransactionDialog from './add-transaction-dialog';
 
 import {
   Card,
@@ -50,12 +50,11 @@ import {
   TrendingUp,
   ShieldQuestion,
   HeartPulse,
-  Gift, // Added Gift
-  Banknote, // Another option for generic account
+  Gift,
+  Banknote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Icon mapping for transaction categories
 const categoryIcons: { [key: string]: React.ElementType } = {
   Food: Utensils,
   Groceries: ShoppingCart,
@@ -63,20 +62,18 @@ const categoryIcons: { [key: string]: React.ElementType } = {
   Utilities: FileText,
   "Rent/Mortgage": Home,
   Transport: Car,
-  Shopping: ShoppingCart, // Changed from ShoppingBag to ShoppingCart
+  Shopping: ShoppingCart,
   Entertainment: Film,
   Health: HeartPulse,
   Education: BookOpen,
-  Income: Briefcase, // For income type transactions
-  Investment: TrendingUp, // For investment type transactions
+  Income: Briefcase,
+  Investment: TrendingUp,
   Travel: Plane,
   Gifts: Gift,
-  Other: CircleDollarSign, // Fallback
+  Other: CircleDollarSign,
   Default: FileText,
 };
 
-
-// Icon mapping for account types
 const accountTypeIcons: { [key: string]: React.ElementType } = {
   Savings: PiggyBank,
   Checking: Landmark, 
@@ -103,7 +100,7 @@ const mapFirestoreTransactionToUI = (transaction: TransactionFirestore): UITrans
   return {
     id: transaction.id!,
     accountId: transaction.accountId,
-    date: transaction.date, // Keep as string from Firestore
+    date: transaction.date,
     description: transaction.description,
     category: transaction.category,
     amount: transaction.amount,
@@ -147,16 +144,14 @@ export default function RecentTransactionsTableCard() {
         setSelectedAccountId(uiAccounts[0].id);
       } else if (uiAccounts.length === 0) {
         setSelectedAccountId(undefined);
-        // Toast for no accounts is now handled by the AddAccountDialog if needed,
-        // or could be added here if preferred (e.g., if user logs in and has no accounts yet)
       }
     } catch (error: any) {
       console.error("Failed to fetch accounts:", error);
       let toastMessage = error.message || "Could not fetch your accounts.";
-      if (error.message && error.message.toLowerCase().includes('permission denied')) {
+      if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission denied'))) {
         toastMessage = "Permission denied fetching accounts. Ensure Firestore rules are deployed and allow access, and that account documents have the correct 'userId' matching the authenticated user.";
-      } else if (error.message && error.message.toLowerCase().includes('index')) {
-        toastMessage = "Missing or insufficient Firestore index for fetching accounts. Check Firestore logs for details and a link to create it.";
+      } else if (error.code === 'failed-precondition' || (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions')))) {
+         toastMessage = "Missing or insufficient Firestore index for fetching accounts. Check Firestore logs for details and a link to create it.";
       }
       toast({
         title: "Error Loading Accounts",
@@ -197,22 +192,21 @@ export default function RecentTransactionsTableCard() {
       const newFormattedDates: Record<string, string> = {};
       uiTransactions.forEach(t => {
          try {
-            // Assuming t.date is 'yyyy-MM-dd'
             const [year, month, day] = t.date.split('-').map(Number);
             if (year && month && day) {
               newFormattedDates[t.id] = new Date(year, month - 1, day).toLocaleDateString();
             } else {
-              newFormattedDates[t.id] = t.date; // fallback if parsing fails
+              newFormattedDates[t.id] = t.date;
             }
           } catch (e) {
             console.warn(`Could not parse date string: ${t.date} for transaction ${t.id}`, e);
-            newFormattedDates[t.id] = t.date; // fallback
+            newFormattedDates[t.id] = t.date;
           }
       });
       setFormattedDates(newFormattedDates);
       
       const selectedAccountName = accounts.find(acc => acc.id === accountId)?.name || 'Selected Account';
-      if (uiTransactions.length === 0 && accounts.length > 0) { // Only toast if account is selected and exists
+      if (uiTransactions.length === 0 && accounts.length > 0) {
          toast({
           title: "No Transactions",
           description: `No transactions found for ${selectedAccountName}.`,
@@ -292,7 +286,6 @@ export default function RecentTransactionsTableCard() {
                 </SelectContent>
               </Select>
             )}
-            {/* AddAccountDialog integrated here */}
             <AddAccountDialog currentUser={currentUser} onAccountAdded={refreshAccounts} />
           </div>
         </div>
@@ -374,12 +367,11 @@ export default function RecentTransactionsTableCard() {
           </ScrollArea>
             {currentUser && selectedAccountId && accounts.length > 0 && (
                  <div className="flex justify-center mt-4">
-                    {/* AddTransactionDialog integrated here */}
                     <AddTransactionDialog 
                         currentUser={currentUser} 
                         selectedAccountId={selectedAccountId} 
+                        allAccounts={accounts} // Pass the accounts array
                         onTransactionAdded={refreshTransactions}
-                        accountsExist={accounts.length > 0}
                     />
                 </div>
             )}

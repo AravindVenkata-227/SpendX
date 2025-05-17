@@ -99,7 +99,7 @@ export default function SettingsPage() {
           }
         } catch (error) {
           console.error("Error fetching profile in settings:", error);
-          toast({ title: "Error", description: "Could not load profile settings.", variant: "destructive" });
+          toast({ title: "Error Loading Profile", description: "Could not load profile settings for notifications.", variant: "destructive" });
           setNotificationPrefs(defaultNotificationPrefs);
         } finally {
           setIsLoadingProfile(false);
@@ -123,9 +123,25 @@ export default function SettingsPage() {
       toast({ title: "Preferences Updated", description: "Your notification preferences have been saved." });
     } catch (error: any) {
       console.error("Error updating notification preferences:", error);
-      toast({ title: "Error", description: error.message || "Could not save preferences.", variant: "destructive" });
-      // Revert optimistic update if save fails (optional, for complex scenarios)
-      // For now, we assume success or let the next fetch correct it.
+      toast({
+        title: "Error Updating Preferences",
+        description: `Failed to save notification preferences. Reason: ${error.message || "Unknown error."}`,
+        variant: "destructive",
+      });
+      // Revert optimistic UI update - fetch fresh profile data to ensure UI consistency
+      if (currentUser) {
+        try {
+          const profile = await getUserProfile(currentUser.uid);
+          if (profile?.notificationPreferences) {
+            setNotificationPrefs(profile.notificationPreferences);
+          } else {
+             setNotificationPrefs(defaultNotificationPrefs); // Revert to defaults if profile fetch fails
+          }
+        } catch (fetchError) {
+            console.error("Error re-fetching profile after update failure:", fetchError);
+            setNotificationPrefs(defaultNotificationPrefs); // Fallback if re-fetch fails
+        }
+      }
     }
   };
 
@@ -306,3 +322,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+

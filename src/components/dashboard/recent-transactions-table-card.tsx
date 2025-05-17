@@ -70,7 +70,7 @@ import {
   Edit3, 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { parseISO, isValid } from 'date-fns';
+import { isValid, parseISO } from 'date-fns';
 import type { DocumentSnapshot } from 'firebase/firestore';
 
 
@@ -117,14 +117,21 @@ const mapFirestoreAccountToUIAccount = (account: FirestoreAccount): UIAccount =>
 
 const mapFirestoreTransactionToUI = (transaction: TransactionFirestore): UITransactionType => {
   const IconComponent = categoryIcons[transaction.category] || categoryIcons[transaction.iconName as keyof typeof categoryIcons] || categoryIcons.Default;
-  let formattedDate = transaction.date;
+  let formattedDate = transaction.date; 
   try {
-    const parsedDate = parseISO(transaction.date);
-    if (isValid(parsedDate)) {
-      formattedDate = parsedDate.toLocaleDateString();
+    // Attempt to parse if it's ISO, otherwise assume it's already formatted (e.g., 'dd/MM/yyyy' or 'MM/dd/yyyy')
+    // The goal here is to pass a display-ready string to UITransactionType.date
+    // More robust parsing might be needed if various date input formats are expected from Firestore.
+    const parsed = parseISO(transaction.date); // Expects 'YYYY-MM-DD'
+    if (isValid(parsed)) {
+      formattedDate = parsed.toLocaleDateString(); // Convert to local date string for display
+    } else {
+      // If parseISO fails, it might already be in a displayable format or a non-standard one
+      // For now, we keep it as is. If it's 'dd/MM/yyyy' or similar, it's fine.
+      // If it's an invalid string, it will just be displayed as such.
     }
   } catch (e) {
-    // Keep original date string if parsing fails
+    console.warn(`Could not parse date string "${transaction.date}" from Firestore for transaction ${transaction.id}. Using original string.`);
   }
   return {
     id: transaction.id!,
@@ -253,18 +260,18 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
 
     if (initialLoad) {
       setIsLoadingTransactions(true);
-      setTransactions([]); // Clear previous transactions on initial load or account switch
+      setTransactions([]); 
     } else {
       setIsLoadingMoreTransactions(true);
     }
 
     try {
-      const { transactions: newFirestoreTransactions, lastDoc: newLastDoc } = await getTransactionsByAccountId(accountId, userId, lastDoc);
+      const { transactions: newFirestoreTransactions, lastDoc: newLastDoc, hasMore } = await getTransactionsByAccountId(accountId, userId, lastDoc);
       const newUiTransactions = newFirestoreTransactions.map(mapFirestoreTransactionToUI);
       
       setTransactions(prev => initialLoad ? newUiTransactions : [...prev, ...newUiTransactions]);
       setLastLoadedDoc(newLastDoc);
-      setHasMoreTransactions(newFirestoreTransactions.length === 10); // Assuming page limit is 10
+      setHasMoreTransactions(hasMore); 
 
       if (initialLoad && newUiTransactions.length === 0 && accounts.length > 0) {
          toast({
@@ -276,9 +283,13 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
 
     } catch (error: any) {
       console.error("Failed to fetch transactions:", error);
+      let errorMessage = "Could not fetch transactions.";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
       toast({
         title: "Error Loading Transactions",
-        description: error.message || "Could not fetch transactions.",
+        description: errorMessage,
         variant: "destructive",
       });
       if (initialLoad) setTransactions([]);
@@ -295,7 +306,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
     } else if (!selectedAccountId && accounts.length === 0) { 
         setTransactions([]);
         setLastLoadedDoc(null);
-        setHasMoreTransactions(true);
+        setHasMoreTransactions(true); 
     }
   }, [selectedAccountId, currentUser, fetchTransactionsBatch, accounts.length]);
 
@@ -324,7 +335,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
         setSelectedAccountId(idToSelect); 
 
         if (idToSelect) { 
-          fetchTransactionsBatch(idToSelect, currentUser.uid, null, true); // Full refresh for selected account
+          fetchTransactionsBatch(idToSelect, currentUser.uid, null, true); 
         } else {
           setTransactions([]); 
           setLastLoadedDoc(null);
@@ -440,7 +451,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
                       <SelectItem key={account.id} value={account.id}>
                         <div className="flex items-center gap-2">
                           <account.icon className="h-4 w-4 text-muted-foreground" />
-                          {account.name} ({account.type})
+                          {account.name} ({account.accountNumberLast4})
                         </div>
                       </SelectItem>
                     ))}
@@ -510,7 +521,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
                           <ArrowUpCircle className="h-5 w-5 text-green-500" />
                         )}
                       </TableCell>
-                      <TableCell className="font-medium flex items-center gap-2">
+                      <TableCell className="font-medium flex items-center gap-2 break-words">
                         <Icon className="h-4 w-4 text-muted-foreground hidden sm:inline-block" />
                         {transaction.description}
                       </TableCell>

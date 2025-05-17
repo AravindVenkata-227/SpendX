@@ -4,13 +4,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UITransactionType, TransactionFirestore, Account as FirestoreAccount, UIAccount, AccountType, PaginatedTransactionsResult } from "@/types";
 import { getTransactionsByAccountId, deleteTransaction } from '@/services/transactionService';
-import { getAccountsByUserId, deleteAccount as deleteAccountService } from '@/services/accountService';
+import { getAccountsByUserId, deleteAccount as deleteAccountService } from '@/services/accountService'; 
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import AddAccountDialog from './add-account-dialog';
-import EditAccountDialog from './edit-account-dialog';
+import EditAccountDialog from './edit-account-dialog'; 
 import AddTransactionDialog from './add-transaction-dialog';
-import EditTransactionDialog from './edit-transaction-dialog';
+import EditTransactionDialog from './edit-transaction-dialog'; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,7 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button"; 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -65,12 +65,12 @@ import {
   ShieldQuestion,
   HeartPulse,
   Gift,
-  Pencil,
-  Trash2,
-  Edit3,
+  Pencil, 
+  Trash2, 
+  Edit3, 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { isValid, parseISO, format } from 'date-fns';
+import { parseISO, isValid } from 'date-fns';
 import type { DocumentSnapshot } from 'firebase/firestore';
 
 
@@ -95,7 +95,7 @@ const categoryIcons: { [key: string]: React.ElementType } = {
 
 const accountTypeIcons: { [key: string]: React.ElementType } = {
   Savings: PiggyBank,
-  Checking: Landmark,
+  Checking: Landmark, 
   "Credit Card": CreditCard,
   Investment: TrendingUp,
   Loan: Briefcase,
@@ -119,22 +119,20 @@ const mapFirestoreTransactionToUI = (transaction: TransactionFirestore): UITrans
   const IconComponent = categoryIcons[transaction.category] || categoryIcons[transaction.iconName as keyof typeof categoryIcons] || categoryIcons.Default;
   let formattedDate = transaction.date;
   try {
-    const parsed = parseISO(transaction.date);
-    if (isValid(parsed)) {
-      formattedDate = format(parsed, 'dd/MM/yyyy');
-    } else {
-      console.warn(`Could not parse date string "${transaction.date}" from Firestore for transaction ${transaction.id}. Using original string.`);
+    const parsedDate = parseISO(transaction.date);
+    if (isValid(parsedDate)) {
+      formattedDate = parsedDate.toLocaleDateString();
     }
   } catch (e) {
-    console.warn(`Error parsing date string "${transaction.date}" for transaction ${transaction.id}: `, e);
+    // Keep original date string if parsing fails
   }
   return {
     id: transaction.id!,
     accountId: transaction.accountId,
-    date: formattedDate,
+    date: formattedDate, 
     description: transaction.description,
     category: transaction.category,
-    amount: transaction.amount,
+    amount: transaction.amount, 
     type: transaction.type,
     icon: IconComponent,
   };
@@ -148,7 +146,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [accounts, setAccounts] = useState<UIAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>(undefined);
-
+  
   const [transactions, setTransactions] = useState<UITransactionType[]>([]);
   const [lastLoadedDoc, setLastLoadedDoc] = useState<DocumentSnapshot | null>(null);
   const [hasMoreTransactions, setHasMoreTransactions] = useState(true);
@@ -157,7 +155,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
 
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const { toast } = useToast();
-
+  
   const [editingTransaction, setEditingTransaction] = useState<UITransactionType | null>(null);
   const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
   const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
@@ -188,31 +186,23 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
   }, []);
 
   const fetchAccounts = useCallback(async (userId: string) => {
-    if (!userId) {
-      toast({ title: "Authentication Error", description: "User ID missing, cannot fetch accounts.", variant: "destructive" });
-      setIsLoadingAccounts(false);
-      setAccounts([]);
-      setSelectedAccountId(undefined);
-      return [];
-    }
-    console.log(`Fetching accounts for userId: ${userId}`);
     setIsLoadingAccounts(true);
     try {
       const firestoreAccounts = await getAccountsByUserId(userId);
       const uiAccounts = firestoreAccounts.map(mapFirestoreAccountToUIAccount);
       setAccounts(uiAccounts);
-      if (uiAccounts.length > 0 && !selectedAccountId) {
+      if (uiAccounts.length > 0 && !selectedAccountId) { 
         const currentSelectedExists = uiAccounts.some(acc => acc.id === selectedAccountId);
         if(!currentSelectedExists) {
           setSelectedAccountId(uiAccounts[0].id);
         }
       } else if (uiAccounts.length === 0) {
         setSelectedAccountId(undefined);
-        setTransactions([]);
+        setTransactions([]); 
         setLastLoadedDoc(null);
         setHasMoreTransactions(false);
       }
-      return uiAccounts;
+      return uiAccounts; 
     } catch (error: any) {
       console.error("Failed to fetch accounts:", error);
       let toastMessage = error.message || "Could not fetch your accounts.";
@@ -228,31 +218,31 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       });
       setAccounts([]);
       setSelectedAccountId(undefined);
-      setTransactions([]);
+      setTransactions([]); 
       setLastLoadedDoc(null);
       setHasMoreTransactions(false);
-      return [];
+      return []; 
     } finally {
       setIsLoadingAccounts(false);
     }
-  }, [toast, selectedAccountId]);
+  }, [toast, selectedAccountId]); 
 
   useEffect(() => {
-    if (currentUser && currentUser.uid) {
+    if (currentUser) {
       fetchAccounts(currentUser.uid);
-    } else if (!currentUser && !isLoadingAccounts) { // To avoid race condition on initial load
+    } else {
+      setIsLoadingAccounts(false);
       setAccounts([]);
       setSelectedAccountId(undefined);
       setTransactions([]);
       setLastLoadedDoc(null);
       setHasMoreTransactions(true);
-      setIsLoadingAccounts(false); // Ensure loading is false if no user
     }
-  }, [currentUser, fetchAccounts, isLoadingAccounts]);
+  }, [currentUser, fetchAccounts]);
 
 
   const fetchTransactionsBatch = useCallback(async (accountId: string | undefined, userId: string, lastDoc: DocumentSnapshot | null, initialLoad: boolean = false) => {
-    if (!accountId) {
+    if (!accountId || !userId) {
       if(initialLoad) setTransactions([]);
       setLastLoadedDoc(null);
       setHasMoreTransactions(false);
@@ -260,29 +250,21 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       setIsLoadingMoreTransactions(false);
       return;
     }
-    if (!userId) {
-        toast({ title: "Authentication Error", description: "User ID missing, cannot fetch transactions.", variant: "destructive" });
-        if(initialLoad) setTransactions([]);
-        setIsLoadingTransactions(false);
-        setIsLoadingMoreTransactions(false);
-        return;
-    }
-    console.log(`Fetching transactions for accountId: ${accountId}, userId: ${userId}, initialLoad: ${initialLoad}`);
 
     if (initialLoad) {
       setIsLoadingTransactions(true);
-      setTransactions([]);
+      setTransactions([]); // Clear previous transactions on initial load or account switch
     } else {
       setIsLoadingMoreTransactions(true);
     }
 
     try {
-      const { transactions: newFirestoreTransactions, lastDoc: newLastDoc } = await getTransactionsByAccountId(accountId, userId, lastDoc, 10);
+      const { transactions: newFirestoreTransactions, lastDoc: newLastDoc } = await getTransactionsByAccountId(accountId, userId, lastDoc);
       const newUiTransactions = newFirestoreTransactions.map(mapFirestoreTransactionToUI);
-
+      
       setTransactions(prev => initialLoad ? newUiTransactions : [...prev, ...newUiTransactions]);
       setLastLoadedDoc(newLastDoc);
-      setHasMoreTransactions(newFirestoreTransactions.length === 10);
+      setHasMoreTransactions(newFirestoreTransactions.length === 10); // Assuming page limit is 10
 
       if (initialLoad && newUiTransactions.length === 0 && accounts.length > 0) {
          toast({
@@ -294,13 +276,9 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
 
     } catch (error: any) {
       console.error("Failed to fetch transactions:", error);
-      let errorMessage = "Could not fetch transactions.";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
       toast({
         title: "Error Loading Transactions",
-        description: errorMessage,
+        description: error.message || "Could not fetch transactions.",
         variant: "destructive",
       });
       if (initialLoad) setTransactions([]);
@@ -312,62 +290,59 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
   }, [toast, accounts]);
 
   useEffect(() => {
-    if (currentUser && currentUser.uid && selectedAccountId) {
+    if (currentUser && selectedAccountId) {
         fetchTransactionsBatch(selectedAccountId, currentUser.uid, null, true); // Initial load
-    } else if (!selectedAccountId && accounts.length === 0 && !isLoadingTransactions) {
+    } else if (!selectedAccountId && accounts.length === 0) { 
         setTransactions([]);
         setLastLoadedDoc(null);
         setHasMoreTransactions(true);
-        setIsLoadingTransactions(false);
     }
-  }, [selectedAccountId, currentUser, fetchTransactionsBatch, accounts.length, isLoadingTransactions]);
+  }, [selectedAccountId, currentUser, fetchTransactionsBatch, accounts.length]);
 
   const handleAccountChange = (accountId: string) => {
     setSelectedAccountId(accountId);
+    // Fetching will be triggered by the useEffect watching selectedAccountId
   };
 
   const refreshData = useCallback((isAccountChange: boolean = false, newSelectedAccountId?: string) => {
-    if (!currentUser || !currentUser.uid) {
-        toast({ title: "Authentication Error", description: "Cannot refresh data, user not logged in.", variant: "destructive" });
-        return;
-    }
-    console.log(`Refreshing data for userId: ${currentUser.uid}, isAccountChange: ${isAccountChange}, newSelectedAccountId: ${newSelectedAccountId}`);
-    fetchAccounts(currentUser.uid).then((fetchedAccs) => {
-        const currentFetchedAccounts = fetchedAccs || accounts;
-
+    if (currentUser) {
+      fetchAccounts(currentUser.uid).then((fetchedAccs) => { 
+        const currentFetchedAccounts = fetchedAccs || accounts; 
+        
         let idToSelect = selectedAccountId;
 
         if (isAccountChange) {
           if (newSelectedAccountId && currentFetchedAccounts.find(a => a.id === newSelectedAccountId)) {
-            idToSelect = newSelectedAccountId;
+            idToSelect = newSelectedAccountId; 
           } else if (currentFetchedAccounts.length > 0 && !currentFetchedAccounts.find(a => a.id === selectedAccountId)) {
-            idToSelect = currentFetchedAccounts[0].id;
+            idToSelect = currentFetchedAccounts[0].id; 
           } else if (currentFetchedAccounts.length === 0) {
             idToSelect = undefined;
           }
         }
+        
+        setSelectedAccountId(idToSelect); 
 
-        setSelectedAccountId(idToSelect);
-
-        if (idToSelect && currentUser && currentUser.uid) {
-          fetchTransactionsBatch(idToSelect, currentUser.uid, null, true);
+        if (idToSelect) { 
+          fetchTransactionsBatch(idToSelect, currentUser.uid, null, true); // Full refresh for selected account
         } else {
-          setTransactions([]);
+          setTransactions([]); 
           setLastLoadedDoc(null);
           setHasMoreTransactions(false);
         }
-        onDataChange();
+        onDataChange(); 
       });
-  }, [currentUser, fetchAccounts, accounts, selectedAccountId, fetchTransactionsBatch, onDataChange, toast]);
-
+    }
+  }, [currentUser, fetchAccounts, accounts, selectedAccountId, fetchTransactionsBatch, onDataChange]);
+  
   const handleEditTransaction = (transaction: UITransactionType) => {
     setEditingTransaction(transaction);
     setIsEditTransactionDialogOpen(true);
   };
 
   const handleDeleteTransaction = async () => {
-    if (!currentUser || !currentUser.uid || !deletingTransactionId) {
-      toast({ title: "Error", description: "User, user ID, or transaction ID missing for deletion.", variant: "destructive" });
+    if (!currentUser || !deletingTransactionId) {
+      toast({ title: "Error", description: "User or transaction ID missing for deletion.", variant: "destructive" });
       return;
     }
     try {
@@ -384,36 +359,32 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
   };
 
   const handleEditAccount = () => {
-    if (!selectedAccountId) {
-      toast({ title: "No Account Selected", description: "Please select an account to edit.", variant: "destructive" });
-      return;
-    }
     const account = accounts.find(acc => acc.id === selectedAccountId);
     if (account) {
       setEditingAccount(account);
       setIsEditAccountDialogOpen(true);
     } else {
-      toast({ title: "Error", description: "Selected account not found.", variant: "destructive" });
+      toast({ title: "Error", description: "Please select an account to edit.", variant: "destructive" });
     }
   };
 
   const handleDeleteAccount = async () => {
-    if (!currentUser || !currentUser.uid || !deletingAccountId) {
-      toast({ title: "Error", description: "User, user ID, or account ID missing for deletion.", variant: "destructive" });
+    if (!currentUser || !deletingAccountId) {
+      toast({ title: "Error", description: "User or account ID missing for deletion.", variant: "destructive" });
       return;
     }
-    const accountToDeleteId = deletingAccountId;
+    const accountToDeleteId = deletingAccountId; 
     try {
       await deleteAccountService(accountToDeleteId, currentUser.uid);
-      toast({ title: "Success", description: "Account and its transactions deleted successfully." });
-
+      toast({ title: "Success", description: "Account deleted successfully." });
+      
       const remainingAccounts = accounts.filter(acc => acc.id !== accountToDeleteId);
       let nextSelectedId: string | undefined = undefined;
       if (remainingAccounts.length > 0) {
-        if (selectedAccountId === accountToDeleteId) {
-          nextSelectedId = remainingAccounts[0].id;
+        if (selectedAccountId === accountToDeleteId) { 
+          nextSelectedId = remainingAccounts[0].id; 
         } else {
-          nextSelectedId = selectedAccountId;
+          nextSelectedId = selectedAccountId; 
         }
       }
       refreshData(true, nextSelectedId);
@@ -429,14 +400,14 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
 
   const handleInitiateDeleteFromEditDialog = () => {
     if (editingAccount) {
-      setIsEditAccountDialogOpen(false);
-      setDeletingAccountId(editingAccount.id);
-      setIsDeleteAccountDialogOpen(true);
+      setIsEditAccountDialogOpen(false); 
+      setDeletingAccountId(editingAccount.id); 
+      setIsDeleteAccountDialogOpen(true); 
     }
   };
 
   const handleLoadMoreTransactions = () => {
-    if (currentUser && currentUser.uid && selectedAccountId && hasMoreTransactions && !isLoadingMoreTransactions) {
+    if (currentUser && selectedAccountId && hasMoreTransactions && !isLoadingMoreTransactions) {
       fetchTransactionsBatch(selectedAccountId, currentUser.uid, lastLoadedDoc, false);
     }
   };
@@ -469,7 +440,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
                       <SelectItem key={account.id} value={account.id}>
                         <div className="flex items-center gap-2">
                           <account.icon className="h-4 w-4 text-muted-foreground" />
-                          {account.name} ({account.accountNumberLast4})
+                          {account.name} ({account.type})
                         </div>
                       </SelectItem>
                     ))}
@@ -485,7 +456,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
           </div>
         </div>
         <CardDescription className="mt-2">
-          {!currentUser ? "Please log in to view your transactions." :
+          {!currentUser ? "Please log in to view your transactions." : 
            accounts.length === 0 && !isLoadingAccounts ? "Add an account to start tracking transactions." :
            `Your latest financial activities for ${accounts.find(acc => acc.id === selectedAccountId)?.name || 'the selected account'}.`}
         </CardDescription>
@@ -500,7 +471,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
            <div className="flex items-center justify-center h-[300px]">
              <p className="text-muted-foreground">Login to see your transactions.</p>
            </div>
-        ) : !selectedAccountId && accounts.length > 0 && !isLoadingAccounts ? (
+        ) : !selectedAccountId && accounts.length > 0 && !isLoadingAccounts ? ( 
             <div className="flex items-center justify-center h-[300px]">
              <p className="text-muted-foreground">Please select an account to view transactions.</p>
            </div>
@@ -539,14 +510,14 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
                           <ArrowUpCircle className="h-5 w-5 text-green-500" />
                         )}
                       </TableCell>
-                      <TableCell className="font-medium flex items-center gap-2 break-words">
+                      <TableCell className="font-medium flex items-center gap-2">
                         <Icon className="h-4 w-4 text-muted-foreground hidden sm:inline-block" />
                         {transaction.description}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">{transaction.category}</Badge>
                       </TableCell>
-                      <TableCell>{transaction.date}</TableCell>
+                      <TableCell>{transaction.date}</TableCell> 
                       <TableCell
                         className={cn(
                           "text-right font-semibold",
@@ -589,9 +560,9 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
             )}
             {currentUser && selectedAccountId && accounts.length > 0 && (
                  <div className="flex justify-center mt-4">
-                    <AddTransactionDialog
-                        currentUser={currentUser}
-                        selectedAccountId={selectedAccountId}
+                    <AddTransactionDialog 
+                        currentUser={currentUser} 
+                        selectedAccountId={selectedAccountId} 
                         allAccounts={accounts}
                         onTransactionAdded={() => refreshData()}
                     />
@@ -652,11 +623,11 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
             if (!open) setEditingAccount(null);
           }}
           onAccountUpdated={() => {
-            refreshData(true, editingAccount?.id);
+            refreshData(true, editingAccount?.id); 
             setIsEditAccountDialogOpen(false);
             setEditingAccount(null);
           }}
-          onInitiateDelete={handleInitiateDeleteFromEditDialog}
+          onInitiateDelete={handleInitiateDeleteFromEditDialog} 
         />
       )}
 

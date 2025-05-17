@@ -37,10 +37,8 @@ const formSchema = z.object({
   name: z.string().min(2, { message: "Account name must be at least 2 characters." }).max(50),
   type: z.enum(AccountTypes, { required_error: "Please select an account type." }),
   accountNumberLast4: z.string()
-    .length(4, { message: "Must be 4 digits if provided." })
-    .regex(/^\d{4}$/, { message: "Must be 4 digits if provided." })
-    .optional()
-    .or(z.literal('')), // Allows empty string
+    .length(4, { message: "Must be 4 digits." })
+    .regex(/^\d{4}$/, { message: "Must be 4 digits." }),
 });
 
 interface EditAccountDialogProps {
@@ -70,7 +68,7 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
       form.reset({
         name: accountToEdit.name,
         type: accountToEdit.type,
-        accountNumberLast4: accountToEdit.accountNumberLast4 || '',
+        accountNumberLast4: accountToEdit.accountNumberLast4 || '', // Ensure it defaults to string if null/undefined
       });
     }
   }, [accountToEdit, open, form]);
@@ -87,7 +85,7 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
         name: values.name,
         type: values.type as AccountType,
         iconName: iconName,
-        accountNumberLast4: values.accountNumberLast4 || null, // Send null if empty to potentially clear it
+        accountNumberLast4: values.accountNumberLast4, // Now mandatory and will be a string
       };
       await updateAccount(accountToEdit.id, currentUser.uid, updateData);
       toast({ title: "Success", description: "Account updated successfully." });
@@ -111,6 +109,7 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
     <Dialog open={open} onOpenChange={(isOpen) => {
       if (!isLoading) {
         onOpenChange(isOpen);
+         if (!isOpen) form.reset(); // Reset form if dialog is closed
       }
     }}>
       <DialogContent className="sm:max-w-[425px]">
@@ -157,7 +156,7 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
             )}
           </div>
            <div>
-            <Label htmlFor="accountNumberLast4-edit">Account Number (Last 4 Digits - Optional)</Label>
+            <Label htmlFor="accountNumberLast4-edit">Account Number (Last 4 Digits)</Label>
             <div className="relative mt-1">
                 <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input

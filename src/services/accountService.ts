@@ -5,7 +5,7 @@ import { collection, addDoc, getDocs, query, where, orderBy, serverTimestamp, Ti
 
 /**
  * Adds a new account to Firestore for the authenticated user.
- * @param accountData - The data for the account to add. Must include `userId`, `name`, `type`, and `iconName`.
+ * @param accountData - The data for the account to add. Must include `userId`, `name`, `type`, `iconName`, and `accountNumberLast4`.
  * @returns The ID of the newly added account.
  */
 export async function addAccount(accountData: Omit<Account, 'id' | 'createdAt'>): Promise<string> {
@@ -13,24 +13,15 @@ export async function addAccount(accountData: Omit<Account, 'id' | 'createdAt'>)
     console.error("Error adding account: userId is missing.");
     throw new Error("User ID is required to add an account.");
   }
-  if (!accountData.name || !accountData.type || !accountData.iconName) {
-     console.error("Error adding account: name, type, or iconName is missing.");
-    throw new Error("Account name, type, and icon name are required.");
+  if (!accountData.name || !accountData.type || !accountData.iconName || !accountData.accountNumberLast4) {
+     console.error("Error adding account: name, type, iconName, or accountNumberLast4 is missing.");
+    throw new Error("Account name, type, icon name, and last 4 digits of account number are required.");
   }
 
   const dataToSave: any = {
     ...accountData,
     createdAt: serverTimestamp(),
   };
-
-  // Only include accountNumberLast4 if it's provided and not an empty string
-  if (accountData.accountNumberLast4 && accountData.accountNumberLast4.trim() !== '') {
-    dataToSave.accountNumberLast4 = accountData.accountNumberLast4;
-  } else {
-    // Ensure it's not saved if empty, or handle as null if preferred for querying
-    delete dataToSave.accountNumberLast4; 
-  }
-
 
   try {
     const docRef = await addDoc(collection(db, 'accounts'), dataToSave);
@@ -69,9 +60,9 @@ export async function getAccountsByUserId(userId: string): Promise<Account[]> {
         name: data.name,
         type: data.type as AccountType,
         iconName: data.iconName,
-        accountNumberLast4: data.accountNumberLast4 || undefined,
+        accountNumberLast4: data.accountNumberLast4, // Will always be a string now
         createdAt: data.createdAt as Timestamp,
-      } as Account); // Ensure correct casting
+      } as Account); 
     });
     return accounts;
   } catch (e: any)
@@ -107,14 +98,8 @@ export async function updateAccount(accountId: string, userId: string, updateDat
   const accountRef = doc(db, 'accounts', accountId);
   
   const dataToUpdate: any = { ...updateData };
-  // If accountNumberLast4 is explicitly set to an empty string, remove it or set to a specific value
-  // to signify it's not present (e.g., if Firestore handles empty strings as not present)
-  if (updateData.accountNumberLast4 === '') {
-    dataToUpdate.accountNumberLast4 = null; // Or use delete if you prefer not to store nulls
-  } else if (updateData.accountNumberLast4) {
-    dataToUpdate.accountNumberLast4 = updateData.accountNumberLast4;
-  }
-  // if accountNumberLast4 is undefined in updateData, it won't be touched
+  // If accountNumberLast4 is provided in updateData, it will be a valid 4-digit string
+  // due to form validation. No special handling for empty string is needed here.
 
   try {
     // Firestore rules should handle ownership verification (userId must match doc's userId)

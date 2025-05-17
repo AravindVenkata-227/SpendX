@@ -107,7 +107,7 @@ export interface Account {
   name: string; // e.g., "Primary Savings", "Salary Account"
   type: AccountType;
   iconName: string; // Name of the Lucide icon
-  accountNumberLast4?: string; // Optional: Last 4 digits of account number
+  accountNumberLast4: string; // Last 4 digits of account number - now mandatory
   // balance?: number; // Optional: Current balance, can be complex to maintain
   createdAt: Timestamp;
 }
@@ -115,7 +115,7 @@ export interface Account {
 // Account type for UI display (includes actual icon component)
 export interface UIAccount extends Omit<Account, 'iconName' | 'createdAt'> {
   icon: LucideIcon;
-  accountNumberLast4?: string;
+  accountNumberLast4: string;
 }
 
 // Data for updating an account, excluding non-updatable fields

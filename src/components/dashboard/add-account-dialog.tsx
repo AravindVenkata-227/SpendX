@@ -38,10 +38,8 @@ const formSchema = z.object({
   name: z.string().min(2, { message: "Account name must be at least 2 characters." }).max(50),
   type: z.enum(AccountTypes, { required_error: "Please select an account type." }),
   accountNumberLast4: z.string()
-    .length(4, { message: "Must be 4 digits if provided." })
-    .regex(/^\d{4}$/, { message: "Must be 4 digits if provided." })
-    .optional()
-    .or(z.literal('')), // Allows empty string
+    .length(4, { message: "Must be 4 digits." })
+    .regex(/^\d{4}$/, { message: "Must be 4 digits." }),
 });
 
 interface AddAccountDialogProps {
@@ -76,10 +74,8 @@ export default function AddAccountDialog({ currentUser, onAccountAdded }: AddAcc
         name: values.name,
         type: values.type as AccountType,
         iconName: iconName,
+        accountNumberLast4: values.accountNumberLast4, // Now mandatory
       };
-      if (values.accountNumberLast4 && values.accountNumberLast4.trim() !== '') {
-        accountData.accountNumberLast4 = values.accountNumberLast4;
-      }
 
       await addAccount(accountData);
       toast({ title: "Success", description: "Account added successfully." });
@@ -95,7 +91,12 @@ export default function AddAccountDialog({ currentUser, onAccountAdded }: AddAcc
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(isOpen) => {
+        if (!isLoading) {
+            setOpen(isOpen);
+            if (!isOpen) form.reset(); // Reset form when dialog closes
+        }
+    }}>
       <DialogTrigger asChild>
         <Button variant="outline" className="w-full sm:w-auto" disabled={!currentUser || isLoading}>
           <PlusCircle className="mr-2 h-4 w-4" /> Add Account
@@ -145,7 +146,7 @@ export default function AddAccountDialog({ currentUser, onAccountAdded }: AddAcc
             )}
           </div>
           <div>
-            <Label htmlFor="accountNumberLast4">Account Number (Last 4 Digits - Optional)</Label>
+            <Label htmlFor="accountNumberLast4">Account Number (Last 4 Digits)</Label>
              <div className="relative mt-1">
                 <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input

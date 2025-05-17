@@ -4,22 +4,34 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Transactions - users can only read/write their own
+    // Rules for the 'users' collection
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // For creating a profile:
+      // 1. User must be authenticated.
+      // 2. The UID of the authenticated user must match the document ID (userId in the path).
+      // 3. The 'id' field within the data being written must also match the authenticated user's UID.
+      allow create: if request.auth != null &&
+                       request.auth.uid == userId &&
+                       request.resource.data.id == request.auth.uid;
+      allow update: if request.auth != null && request.auth.uid == userId; // User can update their own profile
+      allow delete: if false; // Generally, don't allow users to delete their profiles directly
+    }
+
+    // Rules for the 'transactions' collection
     match /transactions/{transactionId} {
       allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      // Ensure users can only operate on their own transactions.
+      // 'userId' field must exist in the transaction document.
     }
 
-    // Goals - users can only read/write their own
+    // Rules for the 'goals' collection
     match /goals/{goalId} {
       allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-    }
-
-    // User profiles - users can create their own profile, read their own, update their own
-    match /users/{userId} {
-      allow read, update: if request.auth != null && request.auth.uid == userId; // userId here is the document ID
-      allow create: if request.auth != null && request.auth.uid == userId;     // userId here is the document ID
+      // Ensure users can only operate on their own goals.
+      // 'userId' field must exist in the goal document.
     }
   }
 }

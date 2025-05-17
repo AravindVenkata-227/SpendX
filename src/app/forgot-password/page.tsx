@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from 'react';
+import type { NextPage } from 'next';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Mail, Wallet, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-export default function ForgotPasswordPage() {
+const ForgotPasswordPage: NextPage = () => {
   const [email, setEmail] = useState('');
   const router = useRouter();
   const { toast } = useToast();
@@ -24,8 +25,8 @@ export default function ForgotPasswordPage() {
       description: `If an account exists for ${email}, a reset link has been sent.`,
       variant: 'default',
     });
-    // Optionally redirect or clear form
-    // router.push('/login'); 
+    setEmail(''); // Clear the email field
+    router.push('/login'); // Redirect to login page
   };
 
   return (
@@ -86,3 +87,5 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
+
+export default ForgotPasswordPage;

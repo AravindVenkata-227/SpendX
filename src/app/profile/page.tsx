@@ -10,7 +10,7 @@ import { getUserProfile, type UserProfile } from '@/services/userService';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Mail, User as UserIcon, ArrowLeft, Loader2, ShieldAlert } from 'lucide-react';
+import { Mail, User as UserIcon, ArrowLeft, Loader2, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function ProfilePage() {
@@ -28,12 +28,15 @@ export default function ProfilePage() {
           const profile = await getUserProfile(user.uid);
           setUserProfile(profile);
         } catch (error: any) {
-          console.error("Error fetching user profile:", error);
+          // This catch is unlikely to be hit if getUserProfile handles its own errors and returns null.
+          // However, keeping it for safety.
+          console.error("Error fetching user profile in ProfilePage:", error);
           toast({
             title: "Error",
-            description: "Could not load your profile information.",
+            description: "Could not load your profile information due to an unexpected error.",
             variant: "destructive",
           });
+          setUserProfile(null); // Ensure profile is null on error
         }
       } else {
         router.push('/login'); // Redirect if not authenticated
@@ -79,13 +82,17 @@ export default function ProfilePage() {
       <Card className="w-full max-w-lg shadow-2xl">
         <CardHeader className="items-center text-center">
           <Avatar className="h-24 w-24 mb-4 border-2 border-primary">
-            <AvatarImage src={currentUser ? `https://placehold.co/96x96.png?text=${getInitials(userProfile?.fullName, currentUser.email)}` : "https://placehold.co/96x96.png"} alt="User Avatar" data-ai-hint="user avatar large" />
+            <AvatarImage 
+              src={currentUser ? `https://placehold.co/96x96.png?text=${getInitials(userProfile?.fullName, currentUser.email)}` : "https://placehold.co/96x96.png"} 
+              alt="User Avatar" 
+              data-ai-hint="user avatar large" 
+            />
             <AvatarFallback className="text-3xl">
               {getInitials(userProfile?.fullName, currentUser?.email)}
             </AvatarFallback>
           </Avatar>
           <CardTitle className="text-3xl">
-            {userProfile ? userProfile.fullName : 'Your Profile'}
+            {userProfile?.fullName || currentUser?.displayName || 'Your Profile'}
           </CardTitle>
           <CardDescription>
             View and manage your account details.
@@ -126,9 +133,17 @@ export default function ProfilePage() {
               </Button>
             </>
           ) : (
+            // This block is shown if isLoading (page-level) is false, currentUser exists, but userProfile is null.
             <div className="text-center text-muted-foreground py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-              <p>Loading profile information...</p>
+              <AlertTriangle className="h-10 w-10 text-destructive mx-auto mb-3" />
+              <p className="font-semibold">Profile Information Not Available</p>
+              <p className="text-xs mt-1">
+                We couldn't load your detailed profile. This might be because it hasn't been created yet, 
+                or there was an issue during retrieval.
+              </p>
+               <p className="text-xs mt-1">
+                If you just signed up, it might take a moment. Otherwise, please contact support if this persists.
+              </p>
             </div>
           )}
           <Button variant="ghost" className="w-full mt-4" asChild>

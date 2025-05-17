@@ -63,7 +63,7 @@ export async function getAccountsByUserId(userId: string): Promise<Account[]> {
     console.error(`Error fetching accounts for user ${userId}: `, e);
     let detailedMessage = "Could not fetch accounts. Check server logs for details.";
     if (e.code === 'permission-denied') {
-        detailedMessage = "Permission denied fetching accounts. Check Firestore rules.";
+        detailedMessage = "Permission denied fetching accounts. Ensure Firestore rules are deployed and allow access, and that account documents have the correct 'userId' matching the authenticated user.";
     } else if (e.message && (e.message.includes('index') || e.message.includes('Index'))) {
         detailedMessage = "Missing or insufficient Firestore index for fetching accounts. Check Firestore logs for details and a link to create it.";
     }

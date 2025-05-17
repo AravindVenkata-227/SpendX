@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import SummaryItemCard from "@/components/dashboard/summary-item-card";
 import { ShieldCheck, PiggyBank, TrendingDown, Activity, Loader2, TrendingUp, DollarSign } from "lucide-react";
 import { calculateFinancialHealth, type FinancialHealthOutput } from '@/ai/flows/financial-health-flow';
@@ -19,9 +19,6 @@ export default function SummarySection() {
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const { toast } = useToast();
 
-  // Placeholder data for "Upcoming Bills" - this would require its own data source and logic
-  const upcomingBills = 3;
-
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -36,76 +33,101 @@ export default function SummarySection() {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    const getFinancialHealth = async () => {
-      if (!currentUser) {
-        setIsLoadingHealth(false);
-        return;
-      }
-      setIsLoadingHealth(true);
-      try {
-        const mockFinancialSummary = "User has a steady income, saves about 15% of it. Has some credit card debt but is managing payments. Spends moderately on non-essentials. Has a small emergency fund.";
-        const result = await calculateFinancialHealth({ financialSummary: mockFinancialSummary });
-        setFinancialHealth(result);
-      } catch (error) {
-        console.error("Error fetching financial health:", error);
-        toast({
-          title: "Error",
-          description: "Could not fetch financial health score.",
-          variant: "destructive",
-        });
-        setFinancialHealth({ score: 0, explanation: "Error loading score."});
-      } finally {
-        setIsLoadingHealth(false);
-      }
-    };
-
-    const fetchMonthlySummary = async () => {
-      if (!currentUser) {
-        setIsLoadingSummary(false);
-        return;
-      }
-      setIsLoadingSummary(true);
-      try {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth() + 1; // JavaScript months are 0-indexed
-        const summary = await getMonthlySummary(currentUser.uid, year, month);
-        setMonthlySummary(summary);
-      } catch (error: any) {
-        console.error("Error fetching monthly summary:", error);
-        toast({
-          title: "Summary Error",
-          description: error.message || "Could not fetch monthly financial summary.",
-          variant: "destructive",
-        });
-        setMonthlySummary({ totalIncome: 0, totalExpenses: 0, netSavings: 0 });
-      } finally {
-        setIsLoadingSummary(false);
-      }
-    };
-    
-    if (currentUser) {
-      getFinancialHealth();
-      fetchMonthlySummary();
-    } else {
-      // Ensure loaders are off if no user
-      setIsLoadingHealth(false);
-      setIsLoadingSummary(false);
-    }
-  }, [currentUser, toast]);
-
-  const formatCurrency = (value: number | undefined | null) => {
+  const formatCurrency = (value: number | undefined | null): string => {
     if (value === undefined || value === null) return '₹0';
     return `₹${value.toLocaleString()}`;
   };
+
+  const fetchAllSummaries = useCallback(async (user: User) => {
+    setIsLoadingSummary(true);
+    setIsLoadingHealth(true); // Start loading health score as well
+
+    let currentMonthlySummary: MonthlySummary | null = null;
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      currentMonthlySummary = await getMonthlySummary(user.uid, year, month);
+      setMonthlySummary(currentMonthlySummary);
+    } catch (error: any) {
+      console.error("Error fetching monthly summary:", error);
+      toast({
+        title: "Summary Error",
+        description: error.message || "Could not fetch monthly financial summary.",
+        variant: "destructive",
+      });
+      setMonthlySummary({ totalIncome: 0, totalExpenses: 0, netSavings: 0 }); // Set default on error
+      currentMonthlySummary = { totalIncome: 0, totalExpenses: 0, netSavings: 0 }; // Use default for AI
+    } finally {
+      setIsLoadingSummary(false);
+    }
+
+    // Now generate financial health score based on fetched or default summary
+    try {
+      let dynamicFinancialSummary = "User's current month financial overview:\n";
+      if (currentMonthlySummary) {
+        dynamicFinancialSummary += `- Total Income: ${formatCurrency(currentMonthlySummary.totalIncome)}\n`;
+        dynamicFinancialSummary += `- Total Expenses: ${formatCurrency(currentMonthlySummary.totalExpenses)}\n`;
+        dynamicFinancialSummary += `- Net Savings: ${formatCurrency(currentMonthlySummary.netSavings)}\n`;
+
+        if (currentMonthlySummary.netSavings > 0) {
+          dynamicFinancialSummary += `The user is saving money this month.`;
+          if (currentMonthlySummary.totalIncome > 0) {
+            const savingsRate = (currentMonthlySummary.netSavings / currentMonthlySummary.totalIncome) * 100;
+            dynamicFinancialSummary += ` Their current monthly savings rate is approximately ${savingsRate.toFixed(0)}%.`;
+          }
+        } else if (currentMonthlySummary.netSavings < 0) {
+          dynamicFinancialSummary += `The user is spending more than their income this month.`;
+        } else {
+          dynamicFinancialSummary += `The user's income and expenses are balanced this month.`;
+        }
+      } else {
+        dynamicFinancialSummary = "Not enough transaction data available for a detailed financial summary this month. Please add more transactions.";
+      }
+      
+      // Add a note about placeholder nature if data is minimal
+      if (currentMonthlySummary?.totalIncome === 0 && currentMonthlySummary?.totalExpenses === 0) {
+        dynamicFinancialSummary += "\n(Note: Score based on limited or no transaction data for the current month.)";
+      }
+
+
+      const result = await calculateFinancialHealth({ financialSummary: dynamicFinancialSummary });
+      setFinancialHealth(result);
+    } catch (error) {
+      console.error("Error fetching financial health:", error);
+      toast({
+        title: "AI Health Score Error",
+        description: "Could not fetch AI financial health score.",
+        variant: "destructive",
+      });
+      setFinancialHealth({ score: 0, explanation: "Error loading score." });
+    } finally {
+      setIsLoadingHealth(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchAllSummaries(currentUser);
+    } else {
+      setIsLoadingSummary(false);
+      setIsLoadingHealth(false);
+      setMonthlySummary(null);
+      setFinancialHealth(null);
+    }
+  }, [currentUser, fetchAllSummaries]);
   
   const renderSummaryValue = (value: number | undefined | null, isLoading: boolean) => {
     if (isLoading) return <Loader2 className="h-5 w-5 animate-spin" />;
-    if (!currentUser) return 'N/A'; // Or some other placeholder if not logged in
+    if (!currentUser) return 'N/A';
     return formatCurrency(value);
   };
 
+  const getHealthDescription = () => {
+    if (isLoadingHealth) return "Calculating...";
+    if (!currentUser) return "Log in to view";
+    return financialHealth?.explanation || "Based on your habits";
+  }
 
   return (
     <section aria-labelledby="summary-heading">
@@ -118,7 +140,7 @@ export default function SummarySection() {
           value={isLoadingHealth || !currentUser ? <Loader2 className="h-5 w-5 animate-spin" /> : `${financialHealth?.score || 0}/100`}
           icon={ShieldCheck}
           iconColor="text-green-500"
-          description={isLoadingHealth || !currentUser ? "Calculating..." : financialHealth?.explanation || "Based on your habits"}
+          description={getHealthDescription()}
         />
         <SummaryItemCard
           title="Total Income (Month)"
@@ -137,7 +159,7 @@ export default function SummarySection() {
         <SummaryItemCard
           title="Net Saved (Month)"
           value={renderSummaryValue(monthlySummary?.netSavings, isLoadingSummary)}
-          icon={PiggyBank} // Or DollarSign if preferred
+          icon={PiggyBank}
           iconColor="text-blue-500"
           description={isLoadingSummary || !currentUser ? "Fetching..." : "Income minus expenses"}
         />

@@ -1,3 +1,4 @@
+
 "use client";
 import * as React from "react";
 import { TrendingUp } from "lucide-react";
@@ -20,11 +21,11 @@ import {
 import type { SpendingCategory, ChartConfig } from "@/types";
 
 const spendingData: SpendingCategory[] = [
-  { name: "Food", value: 4500, fill: "var(--chart-1)" },
-  { name: "Bills", value: 3000, fill: "var(--chart-2)" },
-  { name: "Shopping", value: 2000, fill: "var(--chart-3)" },
-  { name: "Transport", value: 1500, fill: "var(--chart-4)" },
-  { name: "Entertainment", value: 1000, fill: "var(--chart-5)" },
+  { name: "Food", value: 4500, fill: "hsl(var(--chart-1))" },
+  { name: "Bills", value: 3000, fill: "hsl(var(--chart-2))" },
+  { name: "Shopping", value: 2000, fill: "hsl(var(--chart-3))" },
+  { name: "Transport", value: 1500, fill: "hsl(var(--chart-4))" },
+  { name: "Entertainment", value: 1000, fill: "hsl(var(--chart-5))" },
 ];
 
 const chartConfig = {

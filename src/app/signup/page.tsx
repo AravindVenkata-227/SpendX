@@ -37,13 +37,25 @@ export default function SignupPage() {
       const userCredential: UserCredential = await createUserWithEmailAndPassword(auth, email, password);
       
       if (userCredential.user) {
-        await createUserProfile(userCredential.user.uid, fullName, email);
-        toast({
-          title: "Account Created",
-          description: "Welcome! User profile also created. Please login to continue.",
-          variant: "default",
-        });
+        try {
+          await createUserProfile(userCredential.user.uid, fullName, email);
+          toast({
+            title: "Account Created",
+            description: "Welcome! Your profile has been created. Please login to continue.",
+            variant: "default",
+          });
+        } catch (profileError: any) {
+          // This catch block is specifically for errors from createUserProfile
+          console.error('Profile creation error after signup:', profileError);
+          toast({
+            title: "Account Created, Profile Issue",
+            description: "Your account was created, but we couldn't save your profile information. Please try logging in. If issues persist, contact support. (Details in server console)",
+            variant: "destructive", // Or "default" if you still want them to proceed to login
+          });
+          // Still proceed to login, as auth account was created
+        }
       } else {
+         // This case should ideally not happen if createUserWithEmailAndPassword succeeds
          toast({
           title: "Account Created (Profile Skipped)",
           description: "Welcome! Please login to continue. (User object missing for profile creation)",
@@ -51,19 +63,22 @@ export default function SignupPage() {
         });
       }
       router.push('/login');
-    } catch (error: any) {
-      console.error('Signup error:', error);
-      // Check for specific Firebase error codes
+    } catch (authError: any) {
+      // This catch block is primarily for errors from createUserWithEmailAndPassword
+      console.error('Signup auth error:', authError);
+      let toastTitle = "Signup Failed";
       let errorMessage = "Could not create account. Please try again.";
-      if (error.code === 'auth/email-already-in-use') {
+
+      if (authError.code === 'auth/email-already-in-use') {
         errorMessage = 'This email address is already in use. Please try a different email or login.';
-      } else if (error.code === 'auth/weak-password') {
+      } else if (authError.code === 'auth/weak-password') {
         errorMessage = 'The password is too weak. Please use a stronger password (at least 6 characters).';
-      } else if (error.message) {
-        errorMessage = error.message;
+      } else if (authError.message) { // Generic auth error
+        errorMessage = authError.message;
       }
+      
       toast({
-        title: "Signup Failed",
+        title: toastTitle,
         description: errorMessage,
         variant: "destructive",
       });

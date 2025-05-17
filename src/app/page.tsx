@@ -7,6 +7,7 @@ import SummarySection from '@/components/dashboard/summary-section';
 import ChartsSection from '@/components/dashboard/charts-section';
 import GoalsSection from '@/components/dashboard/goals-section';
 import TransactionsSection from '@/components/dashboard/transactions-section';
+import FinancialInsightsCard from '@/components/dashboard/financial-insights-card'; // Import the new card
 
 export default function DashboardPage() {
   const [currentYear, setCurrentYear] = useState<number | null>(null);
@@ -20,6 +21,7 @@ export default function DashboardPage() {
       <Header />
       <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6">
         <SummarySection />
+        <FinancialInsightsCard /> {/* Add the new card here */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <div className="lg:col-span-3">
             <ChartsSection />

@@ -23,11 +23,11 @@ const SpendingInsightInputSchema = z.object({
 export type SpendingInsightInput = z.infer<typeof SpendingInsightInputSchema>;
 
 const SpendingInsightOutputSchema = z.object({
-  insight: z.string().describe('The generated spending insight.'),
+  insight: z.string().describe('The generated spending insight. This should be concise and actionable.'),
   sendNotification: z
     .boolean()
     .describe(
-      'Whether a notification should be sent to the user based on the insight and their preferences.'
+      'Whether a notification should be sent to the user based on the insight and their preferences. Only set to true if the insight is significant and aligns with user preferences (e.g., major overspending, savings opportunities, unusual activity).'
     ),
 });
 export type SpendingInsightOutput = z.infer<typeof SpendingInsightOutputSchema>;
@@ -36,16 +36,18 @@ const generateInsightPrompt = ai.definePrompt({
   name: 'generateInsightPrompt',
   input: {schema: SpendingInsightInputSchema},
   output: {schema: SpendingInsightOutputSchema},
-  prompt: `You are an AI assistant that analyzes spending data and generates personalized insights.
+  prompt: `You are an AI financial assistant. Your goal is to analyze the provided spending data and user preferences to generate a personalized, concise, and actionable spending insight.
 
-  You will use the spending data and user preferences to generate a concise and actionable spending insight.  You must ALWAYS generate an insight.
+You must ALWAYS generate an insight.
 
-  Based on the insight and user preferences, you will determine whether a notification should be sent to the user.  You MUST carefully consider the user's preferences, and only send a notification if it is likely to lead to improved financial decision making.
+Carefully consider the user's preferences when deciding if a notification should be sent. Only recommend sending a notification (set 'sendNotification' to true) if the insight is genuinely important for the user's financial well-being, such as highlighting significant overspending, identifying savings opportunities, or flagging unusual activity that matches their notification preferences.
 
-  Spending Data: {{{spendingData}}}
-  User Preferences: {{{userPreferences}}}
-  Insight:  {{output insight}}
-  Send Notification: {{output sendNotification}}`,
+Spending Data:
+{{{spendingData}}}
+
+User Preferences:
+{{{userPreferences}}}
+`,
 });
 
 export async function generateSpendingInsight(input: SpendingInsightInput): Promise<SpendingInsightOutput> {

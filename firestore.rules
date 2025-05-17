@@ -5,45 +5,62 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Users Collection
-    // - Anyone can create their own user profile document during signup.
-    // - Only the authenticated user can read, update, or delete their own profile.
-    // - Email and ID cannot be changed by the client after creation.
+    // Users can:
+    // - Create their own user document (userId must match auth.uid).
+    // - Read their own user document.
+    // - Update their own user document (but not change id, email, createdAt).
+    // - Cannot delete their own user document (for now).
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == userId 
-                    && request.resource.data.id == userId
-                    && request.resource.data.email == request.auth.token.email;
-      allow update: if request.auth != null && request.auth.uid == userId
-                    // Prevent updating id, email, createdAt by client
-                    && !(request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'email', 'createdAt']));
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && 
+                       request.auth.uid == userId;
+      allow read: if request.auth != null && 
+                     request.auth.uid == userId;
+      allow update: if request.auth != null && 
+                       request.auth.uid == userId &&
+                       !(request.resource.data.keySet().hasAny(['id', 'email', 'createdAt'])); 
+      allow delete: if false; // Or implement admin-only delete if needed
     }
 
     // Transactions Collection
-    // - Users can only manage (create, read, update, delete) their own transactions.
-    // - The 'userId' field in the transaction document must match the authenticated user's UID.
+    // Users can:
+    // - Create transactions if they are authenticated and the userId in the new doc matches their auth.uid.
+    // - Read, update, delete their own transactions (userId in the doc must match their auth.uid).
     match /transactions/{transactionId} {
-      allow read: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && 
+                       'userId' in request.resource.data && 
+                       request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if request.auth != null && 
+                                     resource.data != null && // Ensure document exists for read/update/delete
+                                     'userId' in resource.data && 
+                                     resource.data.userId == request.auth.uid;
     }
 
     // Goals Collection
-    // - Users can only manage their own goals.
-    // - The 'userId' field in the goal document must match the authenticated user's UID.
+    // Users can:
+    // - Create goals if they are authenticated and the userId in the new doc matches their auth.uid.
+    // - Read, update, delete their own goals (userId in the doc must match their auth.uid).
     match /goals/{goalId} {
-      allow read: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && 
+                       'userId' in request.resource.data && 
+                       request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if request.auth != null && 
+                                     resource.data != null && 
+                                     'userId' in resource.data && 
+                                     resource.data.userId == request.auth.uid;
     }
-
+    
     // Accounts Collection
-    // - Users can only manage their own accounts.
-    // - The 'userId' field in the account document must match the authenticated user's UID.
+    // Users can:
+    // - Create accounts if they are authenticated and the userId in the new doc matches their auth.uid.
+    // - Read, update, delete their own accounts (userId in the doc must match their auth.uid).
     match /accounts/{accountId} {
-       allow read: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
-       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-       allow update, delete: if request.auth != null && resource.data.userId != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && 
+                       'userId' in request.resource.data && 
+                       request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if request.auth != null &&
+                                     resource.data != null &&
+                                     'userId' in resource.data && 
+                                     resource.data.userId == request.auth.uid;
     }
   }
 }

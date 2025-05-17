@@ -8,25 +8,39 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Mail, Wallet, ArrowLeft } from 'lucide-react';
+import { Mail, Wallet, ArrowLeft, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { auth } from '@/lib/firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
 
 const ForgotPasswordPage: NextPage = () => {
   const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock forgot password logic
-    console.log('Password reset request for:', email);
-    toast({
-      title: 'Password Reset Link Sent',
-      description: `If an account exists for ${email}, a reset link has been sent.`,
-      variant: 'default',
-    });
-    setEmail(''); // Clear the email field
-    router.push('/login'); // Redirect to login page
+    setIsLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      toast({
+        title: 'Password Reset Link Sent',
+        description: `If an account exists for ${email}, a password reset link has been sent. Please check your inbox.`,
+        variant: 'default',
+      });
+      setEmail(''); 
+      router.push('/login'); 
+    } catch (error: any) {
+      console.error('Forgot password error:', error);
+      toast({
+        title: "Error Sending Reset Link",
+        description: error.message || "Could not send password reset email. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -38,7 +52,6 @@ const ForgotPasswordPage: NextPage = () => {
       <Card className="w-full max-w-sm shadow-2xl">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-2">
-             {/* Using Mail as an icon for password reset concept */}
             <Mail className="h-8 w-8 text-primary" />
           </div>
           <CardTitle className="text-2xl text-center">Forgot Password?</CardTitle>
@@ -60,18 +73,21 @@ const ForgotPasswordPage: NextPage = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="pl-10"
+                  disabled={isLoading}
                 />
               </div>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full">
-              Send Reset Link
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isLoading ? "Sending Link..." : "Send Reset Link"}
             </Button>
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => router.push('/login')}
+              onClick={() => { if (!isLoading) router.push('/login')}}
+              disabled={isLoading}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Login

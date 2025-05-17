@@ -7,19 +7,39 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { KeyRound, Mail, Lock, Wallet } from 'lucide-react';
+import { KeyRound, Mail, Lock, Wallet, Loader2 } from 'lucide-react';
+import { auth } from '@/lib/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock login logic
-    console.log('Login attempt with:', { email, password });
-    // Redirect to dashboard page after mock login
-    router.push('/');
+    setIsLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      toast({
+        title: "Login Successful",
+        description: "Welcome back!",
+        variant: "default",
+      });
+      router.push('/'); // Redirect to dashboard page after successful login
+    } catch (error: any) {
+      console.error('Login error:', error);
+      toast({
+        title: "Login Failed",
+        description: error.message || "Invalid email or password. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -52,6 +72,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="pl-10"
+                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -63,7 +84,7 @@ export default function LoginPage() {
                   className="text-xs text-primary hover:underline"
                   onClick={(e) => {
                     e.preventDefault();
-                    router.push('/forgot-password');
+                    if (!isLoading) router.push('/forgot-password');
                   }}
                 >
                   Forgot password?
@@ -79,13 +100,15 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="pl-10"
+                  disabled={isLoading}
                 />
               </div>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col">
-            <Button type="submit" className="w-full">
-              Login
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isLoading ? "Logging in..." : "Login"}
             </Button>
             <p className="mt-4 text-xs text-center text-muted-foreground">
               Don't have an account?{' '}
@@ -94,7 +117,7 @@ export default function LoginPage() {
                 className="underline hover:text-primary"
                 onClick={(e) => {
                   e.preventDefault();
-                  router.push('/signup');
+                  if (!isLoading) router.push('/signup');
                 }}
               >
                 Sign up

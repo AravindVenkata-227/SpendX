@@ -7,25 +7,50 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { User, Mail, Lock, Wallet, Users } from 'lucide-react';
+import { User, Mail, Lock, Wallet, Users, Loader2 } from 'lucide-react';
+import { auth } from '@/lib/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirmPassword) {
-      alert("Passwords don't match!"); // Simple validation for now
+      toast({
+        title: "Error",
+        description: "Passwords don't match!",
+        variant: "destructive",
+      });
       return;
     }
-    // Mock signup logic
-    console.log('Signup attempt with:', { fullName, email, password });
-    // Redirect to login page after mock signup
-    router.push('/login');
+    setIsLoading(true);
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      // You might want to store fullName in Firestore user profile here
+      toast({
+        title: "Account Created",
+        description: "Welcome! Please login to continue.",
+        variant: "default",
+      });
+      router.push('/login');
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      toast({
+        title: "Signup Failed",
+        description: error.message || "Could not create account. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -34,7 +59,7 @@ export default function SignupPage() {
         <Wallet className="h-8 w-8" />
         <span>FinTrack AI</span>
       </div>
-      <Card className="w-full max-w-md shadow-2xl"> {/* Increased max-width for more fields */}
+      <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-2">
             <Users className="h-8 w-8 text-primary" />
@@ -58,6 +83,7 @@ export default function SignupPage() {
                   onChange={(e) => setFullName(e.target.value)}
                   required
                   className="pl-10"
+                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -73,6 +99,7 @@ export default function SignupPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="pl-10"
+                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -83,11 +110,12 @@ export default function SignupPage() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="•••••••• (min. 6 characters)"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="pl-10"
+                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -103,13 +131,15 @@ export default function SignupPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   className="pl-10"
+                  disabled={isLoading}
                 />
               </div>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col">
-            <Button type="submit" className="w-full">
-              Create Account
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isLoading ? "Creating Account..." : "Create Account"}
             </Button>
             <p className="mt-4 text-xs text-center text-muted-foreground">
               Already have an account?{' '}
@@ -118,7 +148,7 @@ export default function SignupPage() {
                 className="underline hover:text-primary"
                 onClick={(e) => {
                   e.preventDefault();
-                  router.push('/login');
+                  if (!isLoading) router.push('/login');
                 }}
               >
                 Login

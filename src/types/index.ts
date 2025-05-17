@@ -1,5 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
+import type { Timestamp } from 'firebase/firestore';
 
 // Represents a transaction as stored in Firestore
 export interface TransactionFirestore {
@@ -27,7 +28,7 @@ export interface Goal {
   targetAmount: number;
   savedAmount: number;
   iconName: string; // Store icon name, map to component on client
-  // icon: LucideIcon; // This will be derived on the client
+  createdAt?: Timestamp; // Optional: track when goal was created
 }
 
 // Goal type for UI display

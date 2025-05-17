@@ -9,7 +9,7 @@ import { collection, addDoc, getDocs, query, where, orderBy, serverTimestamp, Ti
  * @param goalData - The data for the goal to add. Must include `userId`.
  * @returns The ID of the newly added goal.
  */
-export async function addGoal(goalData: Omit<Goal, 'id'>): Promise<string> {
+export async function addGoal(goalData: Omit<Goal, 'id' | 'createdAt'>): Promise<string> {
   if (!goalData.userId) {
     console.error("Error adding goal: userId is missing.");
     throw new Error("User ID is required to add a goal.");
@@ -17,7 +17,7 @@ export async function addGoal(goalData: Omit<Goal, 'id'>): Promise<string> {
   try {
     const docRef = await addDoc(collection(db, 'goals'), {
       ...goalData,
-      createdAt: serverTimestamp(), // Optional: track when goal was created
+      createdAt: serverTimestamp(), // Track when goal was created
     });
     console.log("Goal added with ID: ", docRef.id);
     return docRef.id;
@@ -39,11 +39,11 @@ export async function getGoalsByUserId(userId: string): Promise<Goal[]> {
   }
   try {
     const goalsCol = collection(db, 'goals');
-    // Assuming goals might be ordered by name or a timestamp if you add one like 'createdAt'
+    // Order by name by default, can also order by createdAt
     const q = query(
       goalsCol,
       where('userId', '==', userId),
-      orderBy('name', 'asc') // Or orderBy('createdAt', 'desc') if you add a timestamp
+      orderBy('createdAt', 'desc') 
     );
     const querySnapshot = await getDocs(q);
     const goals: Goal[] = [];
@@ -56,7 +56,7 @@ export async function getGoalsByUserId(userId: string): Promise<Goal[]> {
         targetAmount: data.targetAmount,
         savedAmount: data.savedAmount,
         iconName: data.iconName,
-        // createdAt: data.createdAt, // if you store it
+        createdAt: data.createdAt as Timestamp, // Cast to Timestamp
       } as Goal);
     });
     return goals;

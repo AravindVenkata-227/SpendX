@@ -40,11 +40,12 @@ export default function FinancialInsightsCard() {
       setCurrentUser(user);
       if (user) {
         try {
+          console.log(`InsightsCard: Auth state changed, fetching profile for user: ${user.uid}`);
           const profile = await getUserProfile(user.uid);
           setUserProfile(profile);
         } catch (error) {
           console.error("Error fetching profile for insights card:", error);
-          setUserProfile(null); 
+          setUserProfile(null);
         }
       } else {
         setUserProfile(null);
@@ -92,7 +93,7 @@ export default function FinancialInsightsCard() {
 
 
   const handleGetInsight = async () => {
-    if (!currentUser) {
+    if (!currentUser || !currentUser.uid) {
       toast({
         title: 'Authentication Required',
         description: 'Please log in to generate financial insights.',
@@ -100,28 +101,32 @@ export default function FinancialInsightsCard() {
       });
       return;
     }
+    console.log(`Generating insight for userId: ${currentUser.uid}`);
 
     setIsLoading(true);
     setInsightResult(null);
-    
-    let currentPrefs = defaultNotificationPrefs;
+
+    let currentPrefs = userProfile?.notificationPreferences || defaultNotificationPrefs;
+    // Attempt to fetch fresh profile in case preferences were updated elsewhere,
+    // but use existing profile data if fetch fails to avoid blocking insight generation.
     try {
         const freshProfile = await getUserProfile(currentUser.uid);
-        setUserProfile(freshProfile); // Update local profile state
-        if (freshProfile?.notificationPreferences) {
-            currentPrefs = freshProfile.notificationPreferences;
+        if (freshProfile) {
+            setUserProfile(freshProfile); // Update local profile state
+            if (freshProfile.notificationPreferences) {
+                currentPrefs = freshProfile.notificationPreferences;
+            }
         }
     } catch (profileError) {
-        console.error("Could not fetch latest profile for insight generation:", profileError);
-        currentPrefs = userProfile?.notificationPreferences || defaultNotificationPrefs;
+        console.warn("Could not fetch latest profile for insight generation, using possibly stale prefs:", profileError);
     }
-    
+
     const userPreferencesString = formatUserPreferencesForAI(currentPrefs);
 
     try {
       const now = new Date();
       const year = now.getFullYear();
-      const month = now.getMonth() + 1; 
+      const month = now.getMonth() + 1;
       const transactions = await getTransactionsForMonth(currentUser.uid, year, month);
       const spendingDataString = formatTransactionsForAI(transactions);
 
@@ -136,11 +141,10 @@ export default function FinancialInsightsCard() {
           title: 'New Financial Insight!',
           description: result.insight,
           variant: 'default',
-          duration: 7000, 
+          duration: 7000,
         });
 
-        // Check user's preference for receiving AI suggestion emails
-        if (userProfile?.notificationPreferences?.emailForAISuggestions && currentUser.email) {
+        if (currentPrefs.emailForAISuggestions && currentUser.email) {
             console.log(`SIMULATING EMAIL: Would send insight to user ${currentUser.email}: "${result.insight}"`);
             toast({
                 title: 'Email Simulation',

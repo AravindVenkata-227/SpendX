@@ -21,26 +21,19 @@ import { getGoalsByUserId, deleteGoal } from '@/services/goalService';
 import { auth } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Plane, Smartphone, Target, Home, BookOpen, Car, Loader2, ShoppingBag, Gift, ShieldCheck } from "lucide-react"; // ShoppingBag might be an issue if not used or defined.
+import { Plane, Smartphone, Target, Home, BookOpen, Car, Loader2, ShoppingCart, Gift, ShieldCheck } from "lucide-react"; // Note: ShoppingCart is used for consistency
 import { useToast } from "@/hooks/use-toast";
 
 const goalIconComponents: { [key: string]: React.ElementType } = {
-  Plane, Smartphone, ShieldCheck, Home, BookOpen, Car, ShoppingBag, Gift, Target,
-  // Ensure ShoppingBag is correctly mapped or replaced if it's not a direct Lucide icon name
-  // For example, if 'ShoppingBag' from types.ts GoalIcons actually means ShoppingCart icon:
-  // ShoppingBag: ShoppingCart, // Assuming ShoppingCart from lucide-react is intended
+  Plane, Smartphone, ShieldCheck, Home, BookOpen, Car, ShoppingCart, Gift, Target,
 };
 
 const mapFirestoreGoalToUIGoal = (firestoreGoal: FirestoreGoal): UIGoal => {
   let iconKey = firestoreGoal.iconName;
-  // Handle potential mismatches or aliases for icon names if necessary
-  if (iconKey === "ShoppingBag" && !goalIconComponents[iconKey]) {
-    iconKey = "ShoppingCart"; // Fallback or correct mapping
-  } else if (iconKey === "ShieldAlert" && !goalIconComponents[iconKey]) {
-    iconKey = "ShieldCheck";
+  if (iconKey === "ShoppingBag") { // Alias for ShoppingCart
+    iconKey = "ShoppingCart";
   }
-  
-  const IconComponent = goalIconComponents[iconKey] || goalIconComponents.Target; // Default to Target if no match
+  const IconComponent = goalIconComponents[iconKey] || goalIconComponents.Target;
   return {
     id: firestoreGoal.id,
     userId: firestoreGoal.userId,
@@ -56,7 +49,7 @@ export default function GoalsSection() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [goals, setGoals] = useState<UIGoal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  // const [hasShownNoGoalsToast, setHasShownNoGoalsToast] = useState(false); // State for the toast
+  // const [hasShownNoGoalsToast, setHasShownNoGoalsToast] = useState(false);
   const [isAddGoalDialogOpen, setIsAddGoalDialogOpen] = useState(false);
   const [isEditGoalDialogOpen, setIsEditGoalDialogOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<UIGoal | null>(null);
@@ -64,15 +57,22 @@ export default function GoalsSection() {
   const [goalToDeleteId, setGoalToDeleteId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const previousUserIdRef = useRef<string | null | undefined>(null);
+  // const previousUserIdRef = useRef<string | null | undefined>(null);
 
   const fetchGoals = useCallback(async (userId: string): Promise<UIGoal[]> => {
+    if (!userId) {
+        toast({ title: "Authentication Error", description: "User ID missing, cannot fetch goals.", variant: "destructive" });
+        setIsLoading(false);
+        setGoals([]);
+        return [];
+    }
+    console.log(`Fetching goals for userId: ${userId}`);
     setIsLoading(true);
     try {
       const firestoreGoals = await getGoalsByUserId(userId);
       const uiGoals = firestoreGoals.map(mapFirestoreGoalToUIGoal);
       setGoals(uiGoals);
-      return uiGoals; 
+      return uiGoals;
     } catch (error: any) {
       console.error("Failed to fetch goals in component:", error);
       toast({
@@ -81,20 +81,19 @@ export default function GoalsSection() {
         variant: "destructive",
       });
       setGoals([]);
-      return []; 
+      return [];
     } finally {
       setIsLoading(false);
     }
-  }, [toast]); 
+  }, [toast]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       // if (previousUserIdRef.current !== user?.uid) {
-      //   // User has changed (new login, logout, or initial load)
-      //   setHasShownNoGoalsToast(false); // Reset toast flag for new user session
+      //   setHasShownNoGoalsToast(false);
       // }
       setCurrentUser(user);
-      previousUserIdRef.current = user?.uid;
+      // previousUserIdRef.current = user?.uid;
 
       if (!user) {
         setGoals([]);
@@ -106,44 +105,44 @@ export default function GoalsSection() {
 
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && currentUser.uid) {
       fetchGoals(currentUser.uid);
-    } else {
-      setIsLoading(false);
+    } else if (!currentUser && !isLoading) { // Ensure isLoading is false before resetting
       setGoals([]);
+      setIsLoading(false);
     }
-  }, [currentUser, fetchGoals]);
+  }, [currentUser, fetchGoals, isLoading]);
 
   // useEffect(() => {
-  //   // Show "No Savings Goals" toast only if conditions are met and it hasn't been shown
   //   if (!isLoading && currentUser && goals.length === 0 && !hasShownNoGoalsToast) {
   //     toast({
   //       title: "No Savings Goals",
   //       description: "You haven't set any savings goals yet. Click 'Add New Goal' to start!",
   //       variant: "default"
   //     });
-  //     setHasShownNoGoalsToast(true); // Set flag to true after showing toast
+  //     setHasShownNoGoalsToast(true);
   //   }
   // }, [isLoading, currentUser, goals, hasShownNoGoalsToast, toast]);
 
 
   const handleAddGoalClick = () => {
-    if (currentUser) {
-      setIsAddGoalDialogOpen(true);
-    } else {
+    if (!currentUser || !currentUser.uid) {
       toast({ title: "Login Required", description: "Please log in to add a new goal.", variant: "destructive" });
+      return;
     }
+    setIsAddGoalDialogOpen(true);
   };
 
   const handleGoalAddedOrUpdated = () => {
-    if (currentUser) {
-      fetchGoals(currentUser.uid).then((newGoals) => {
-        // if (newGoals.length === 0) {
-        //   setHasShownNoGoalsToast(false); // Allow toast to show if goals become zero
-        // } else {
-        //   setHasShownNoGoalsToast(true); // Goals exist, suppress "no goals" toast
-        // }
-      });
+    if (currentUser && currentUser.uid) {
+      fetchGoals(currentUser.uid);
+      // .then((newGoals) => {
+      //   if (newGoals.length === 0) {
+      //     setHasShownNoGoalsToast(false);
+      //   } else {
+      //     setHasShownNoGoalsToast(true);
+      //   }
+      // });
     }
   };
 
@@ -158,11 +157,14 @@ export default function GoalsSection() {
   };
 
   const confirmDeleteGoal = async () => {
-    if (!currentUser || !goalToDeleteId) return;
+    if (!currentUser || !currentUser.uid || !goalToDeleteId) {
+        toast({ title: "Error", description: "User, user ID, or goal ID missing for deletion.", variant: "destructive" });
+        return;
+    }
     try {
       await deleteGoal(goalToDeleteId, currentUser.uid);
       toast({ title: "Success", description: "Goal deleted successfully." });
-      handleGoalAddedOrUpdated(); 
+      handleGoalAddedOrUpdated();
     } catch (error: any) {
       console.error("Error deleting goal:", error);
       toast({ title: "Error", description: error.message || "Could not delete goal.", variant: "destructive" });
@@ -195,10 +197,10 @@ export default function GoalsSection() {
             <div className="space-y-4">
               {goals.length > 0 ? (
                 goals.map((goal) => (
-                  <GoalProgressItemCard 
-                    key={goal.id} 
-                    goal={goal} 
-                    onEdit={handleEditGoal} 
+                  <GoalProgressItemCard
+                    key={goal.id}
+                    goal={goal}
+                    onEdit={handleEditGoal}
                     onDelete={handleDeleteGoalClick}
                   />
                 ))
@@ -229,7 +231,7 @@ export default function GoalsSection() {
           open={isEditGoalDialogOpen}
           onOpenChange={(open) => {
             setIsEditGoalDialogOpen(open);
-            if (!open) setEditingGoal(null); 
+            if (!open) setEditingGoal(null);
           }}
           onGoalUpdated={handleGoalAddedOrUpdated}
         />

@@ -22,13 +22,19 @@ export interface Transaction extends Omit<TransactionFirestore, 'iconName' | 'id
 
 export interface Goal {
   id: string;
+  userId: string; // ID of the user who owns this goal
   name: string;
   targetAmount: number;
   savedAmount: number;
-  icon: LucideIcon;
-  // Consider adding userId here too if goals are user-specific
-  // userId: string;
+  iconName: string; // Store icon name, map to component on client
+  // icon: LucideIcon; // This will be derived on the client
 }
+
+// Goal type for UI display
+export interface UIGoal extends Omit<Goal, 'iconName'> {
+  icon: LucideIcon;
+}
+
 
 export interface SpendingCategory {
   name: string;
@@ -43,4 +49,3 @@ export interface ChartConfig {
     icon?: LucideIcon;
   };
 }
-

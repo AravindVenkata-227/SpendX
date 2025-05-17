@@ -52,7 +52,7 @@ const formSchema = z.object({
   amount: z.coerce.number().positive({ message: "Amount must be positive." }),
   type: z.enum(['debit', 'credit'], { required_error: "Please select transaction type." }),
   category: z.enum(TransactionCategories, { required_error: "Please select a category." }),
-  date: z.date({ required_error: "Please select a date." }),
+  date: z.date({ required_error: "Please select a date." }).nullable(), // Allow null for "Pick a date" state
 });
 
 interface EditTransactionDialogProps {
@@ -61,7 +61,7 @@ interface EditTransactionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onTransactionUpdated: () => void;
-  accountName?: string; // Optional: for display purposes
+  accountName?: string; 
 }
 
 export default function EditTransactionDialog({ currentUser, transactionToEdit, open, onOpenChange, onTransactionUpdated, accountName }: EditTransactionDialogProps) {
@@ -81,18 +81,30 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
 
   useEffect(() => {
     if (transactionToEdit && open) {
-      let transactionDate = new Date(); // Default to today
-      // Firestore date is YYYY-MM-DD string
-      const parsedDate = parseISO(transactionToEdit.date);
-      if (isValid(parsedDate)) {
-        transactionDate = parsedDate;
+      let transactionDate: Date | null = new Date(); 
+      const parsedDate = parseISO(transactionToEdit.date); // transactionToEdit.date is 'dd/MM/yyyy' from mapFirestoreTransactionToUI
+      // Attempt to parse from 'dd/MM/yyyy' if parseISO fails (which it will for dd/MM/yyyy)
+      // And also parse directly if it's already in yyyy-MM-dd
+      let dateToParse = transactionToEdit.date;
+      if (transactionToEdit.date.includes('/')) { // Likely dd/MM/yyyy
+         const parts = transactionToEdit.date.split('/');
+         if (parts.length === 3) {
+            dateToParse = `${parts[2]}-${parts[1]}-${parts[0]}`; // Convert to yyyy-MM-dd
+         }
+      }
+      
+      const finalParsedDate = parseISO(dateToParse);
+
+      if (isValid(finalParsedDate)) {
+        transactionDate = finalParsedDate;
       } else {
-        console.warn("Invalid date string from transactionToEdit:", transactionToEdit.date);
+        console.warn("Invalid date string from transactionToEdit after attempting parse:", transactionToEdit.date, ". Defaulting to today.");
+        transactionDate = new Date(); 
       }
 
       form.reset({
         description: transactionToEdit.description,
-        amount: Math.abs(transactionToEdit.amount), // Form always deals with positive amount
+        amount: Math.abs(transactionToEdit.amount), 
         type: transactionToEdit.type,
         category: transactionToEdit.category as TransactionCategory,
         date: transactionDate,
@@ -105,6 +117,11 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
       toast({ title: "Error", description: "User or transaction not available.", variant: "destructive" });
       return;
     }
+    if (!values.date) {
+      toast({ title: "Error", description: "Please select a transaction date.", variant: "destructive" });
+      form.setError("date", { type: "manual", message: "Date is required." });
+      return;
+    }
     setIsLoading(true);
     try {
       const transactionAmount = values.type === 'debit' ? -Math.abs(values.amount) : Math.abs(values.amount);
@@ -112,7 +129,7 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
       
       const updateData: TransactionUpdateData = {
         description: values.description,
-        amount: transactionAmount, // Service expects signed amount
+        amount: transactionAmount, 
         type: values.type,
         category: values.category,
         date: format(values.date, 'yyyy-MM-dd'),
@@ -137,7 +154,7 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
-      if (!isLoading) { // Prevent closing while loading
+      if (!isLoading) { 
         onOpenChange(isOpen);
       }
     }}>
@@ -164,7 +181,7 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
             <div>
               <Label>Type</Label>
               <RadioGroup
-                value={form.watch('type')} // Controlled component
+                value={form.watch('type')} 
                 onValueChange={(value) => form.setValue('type', value as 'debit' | 'credit')}
                 className="flex items-center space-x-2 mt-2"
                 disabled={isLoading}
@@ -186,7 +203,7 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
             <div>
               <Label htmlFor="category-edit">Category</Label>
               <Select
-                value={form.watch('category')} // Controlled component
+                value={form.watch('category')} 
                 onValueChange={(value) => form.setValue('category', value as TransactionCategory)}
                 disabled={isLoading}
               >
@@ -211,14 +228,14 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
                     disabled={isLoading}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {form.watch('date') ? format(form.watch('date'), "PPP") : <span>Pick a date</span>}
+                    {form.watch('date') ? format(form.watch('date')!, "PPP") : <span>Pick a date</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
                   <Calendar
                     mode="single"
                     selected={form.watch('date')}
-                    onSelect={(date) => date && form.setValue('date', date)}
+                    onSelect={(date) => form.setValue('date', date || null)}
                     initialFocus
                     disabled={isLoading}
                   />

@@ -27,7 +27,6 @@ export default function SummarySection({ refreshTrigger }: SummarySectionProps) 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       if (!user) {
-        // Reset states if user logs out
         setFinancialHealth(null);
         setMonthlySummary(null);
         setIsLoadingHealth(false);
@@ -43,8 +42,15 @@ export default function SummarySection({ refreshTrigger }: SummarySectionProps) 
   };
 
   const fetchAllSummaries = useCallback(async (user: User) => {
+    if (!user.uid) {
+        toast({ title: "Authentication Error", description: "User ID missing for summary.", variant: "destructive" });
+        setIsLoadingSummary(false);
+        setIsLoadingHealth(false);
+        return;
+    }
+    console.log(`Fetching summaries for userId: ${user.uid}`);
     setIsLoadingSummary(true);
-    setIsLoadingHealth(true); // Start loading health score as well
+    setIsLoadingHealth(true);
 
     let currentMonthlySummary: MonthlySummary | null = null;
     try {
@@ -60,13 +66,12 @@ export default function SummarySection({ refreshTrigger }: SummarySectionProps) 
         description: error.message || "Could not fetch monthly financial summary.",
         variant: "destructive",
       });
-      setMonthlySummary({ totalIncome: 0, totalExpenses: 0, netSavings: 0 }); // Set default on error
-      currentMonthlySummary = { totalIncome: 0, totalExpenses: 0, netSavings: 0 }; // Use default for AI
+      setMonthlySummary({ totalIncome: 0, totalExpenses: 0, netSavings: 0 });
+      currentMonthlySummary = { totalIncome: 0, totalExpenses: 0, netSavings: 0 };
     } finally {
       setIsLoadingSummary(false);
     }
 
-    // Now generate financial health score based on fetched or default summary
     try {
       let dynamicFinancialSummary = "User's current month financial overview:\n";
       if (currentMonthlySummary) {
@@ -88,27 +93,25 @@ export default function SummarySection({ refreshTrigger }: SummarySectionProps) 
       } else {
         dynamicFinancialSummary = "Not enough transaction data available for a detailed financial summary this month. Please add more transactions.";
       }
-      
-      // Add a note about placeholder nature if data is minimal
+
       if (currentMonthlySummary?.totalIncome === 0 && currentMonthlySummary?.totalExpenses === 0) {
         dynamicFinancialSummary += "\n(Note: Score based on limited or no transaction data for the current month.)";
       }
 
-
       const result = await calculateFinancialHealth({ financialSummary: dynamicFinancialSummary });
       setFinancialHealth(result);
-    } catch (error) {
+    } catch (error:any) {
       console.error("Error fetching financial health:", error);
       toast({
         title: "AI Health Score Error",
-        description: "Could not fetch AI financial health score.",
+        description: error.message || "Could not fetch AI financial health score.",
         variant: "destructive",
       });
       setFinancialHealth({ score: 0, explanation: "Error loading score." });
     } finally {
       setIsLoadingHealth(false);
     }
-  }, [toast]); // formatCurrency is stable, no need to include
+  }, [toast]);
 
   useEffect(() => {
     if (currentUser) {
@@ -119,8 +122,8 @@ export default function SummarySection({ refreshTrigger }: SummarySectionProps) 
       setMonthlySummary(null);
       setFinancialHealth(null);
     }
-  }, [currentUser, fetchAllSummaries, refreshTrigger]); // Add refreshTrigger here
-  
+  }, [currentUser, fetchAllSummaries, refreshTrigger]);
+
   const renderSummaryValue = (value: number | undefined | null, isLoading: boolean) => {
     if (isLoading) return <Loader2 className="h-5 w-5 animate-spin" />;
     if (!currentUser) return 'N/A';

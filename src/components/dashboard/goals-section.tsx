@@ -1,10 +1,10 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import GoalProgressItemCard, { AddGoalCard } from "@/components/dashboard/goal-progress-item-card";
 import AddGoalDialog from "@/components/dashboard/add-goal-dialog";
-import EditGoalDialog from "@/components/dashboard/edit-goal-dialog"; // Import EditGoalDialog
+import EditGoalDialog from "@/components/dashboard/edit-goal-dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,7 +14,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"; // Import AlertDialog components
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { UIGoal, Goal as FirestoreGoal } from "@/types";
 import { getGoalsByUserId, deleteGoal } from '@/services/goalService';
@@ -26,7 +26,6 @@ import { useToast } from "@/hooks/use-toast";
 
 const goalIconComponents: { [key: string]: React.ElementType } = {
   Plane, Smartphone, ShieldCheck, Home, BookOpen, Car, ShoppingBag, Gift, Target,
-  // Ensure "ShieldAlert" is mapped if it was ever used or might be in old data
   ShieldAlert: ShieldCheck, 
 };
 
@@ -48,7 +47,7 @@ export default function GoalsSection() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [goals, setGoals] = useState<UIGoal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [hasShownNoGoalsToast, setHasShownNoGoalsToast] = useState(false);
+  // const [hasShownNoGoalsToast, setHasShownNoGoalsToast] = useState(false); // State for the toast
   const [isAddGoalDialogOpen, setIsAddGoalDialogOpen] = useState(false);
   const [isEditGoalDialogOpen, setIsEditGoalDialogOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<UIGoal | null>(null);
@@ -56,57 +55,69 @@ export default function GoalsSection() {
   const [goalToDeleteId, setGoalToDeleteId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      if (!user) {
-        setGoals([]);
-        setIsLoading(false);
-        setHasShownNoGoalsToast(false); 
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+  const previousUserIdRef = useRef<string | null | undefined>(null);
 
-  const fetchGoals = useCallback(async (userId: string) => {
+  const fetchGoals = useCallback(async (userId: string): Promise<UIGoal[]> => {
     setIsLoading(true);
     try {
       const firestoreGoals = await getGoalsByUserId(userId);
       const uiGoals = firestoreGoals.map(mapFirestoreGoalToUIGoal);
       setGoals(uiGoals);
+      return uiGoals; // Return the fetched goals
     } catch (error: any) {
       console.error("Failed to fetch goals in component:", error);
       toast({
         title: "Error Loading Goals",
-        description: error.message || "Could not fetch your savings goals. Please check server logs for specific Firebase errors (e.g., permissions or missing indexes).",
+        description: error.message || "Could not fetch your savings goals. Check server logs (e.g., Firestore permissions/indexes).",
         variant: "destructive",
       });
       setGoals([]);
+      return []; // Return empty on error
     } finally {
       setIsLoading(false);
     }
   }, [toast]); 
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (previousUserIdRef.current !== user?.uid) {
+        // User has changed (new login, logout, or initial load)
+        // setHasShownNoGoalsToast(false); // Reset toast flag for new user session
+      }
+      setCurrentUser(user);
+      previousUserIdRef.current = user?.uid;
+
+      if (!user) {
+        setGoals([]);
+        setIsLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+
+  useEffect(() => {
     if (currentUser) {
       fetchGoals(currentUser.uid);
-      setHasShownNoGoalsToast(false); // Reset toast flag when user changes or logs in
     } else {
+      // Ensure loading is false and goals are cleared if no user
       setIsLoading(false);
       setGoals([]);
     }
   }, [currentUser, fetchGoals]);
 
-  useEffect(() => {
-    if (!isLoading && currentUser && goals.length === 0 && !hasShownNoGoalsToast) {
-      toast({
-        title: "No Savings Goals",
-        description: "You haven't set any savings goals yet. Click 'Add New Goal' to start!",
-        variant: "default"
-      });
-      setHasShownNoGoalsToast(true);
-    }
-  }, [isLoading, currentUser, goals, hasShownNoGoalsToast, toast]);
+  // useEffect(() => {
+  //   // Show "No Savings Goals" toast only if conditions are met and it hasn't been shown
+  //   if (!isLoading && currentUser && goals.length === 0 && !hasShownNoGoalsToast) {
+  //     toast({
+  //       title: "No Savings Goals",
+  //       description: "You haven't set any savings goals yet. Click 'Add New Goal' to start!",
+  //       variant: "default"
+  //     });
+  //     setHasShownNoGoalsToast(true); // Set flag to true after showing toast
+  //   }
+  // }, [isLoading, currentUser, goals, hasShownNoGoalsToast, toast]);
+
 
   const handleAddGoalClick = () => {
     if (currentUser) {
@@ -118,8 +129,13 @@ export default function GoalsSection() {
 
   const handleGoalAddedOrUpdated = () => {
     if (currentUser) {
-      fetchGoals(currentUser.uid);
-      setHasShownNoGoalsToast(false);
+      fetchGoals(currentUser.uid).then((newGoals) => {
+        // if (newGoals.length === 0) {
+        //   setHasShownNoGoalsToast(false); // Allow toast to show if goals become zero
+        // } else {
+        //   setHasShownNoGoalsToast(true); // Goals exist, suppress "no goals" toast
+        // }
+      });
     }
   };
 
@@ -138,7 +154,7 @@ export default function GoalsSection() {
     try {
       await deleteGoal(goalToDeleteId, currentUser.uid);
       toast({ title: "Success", description: "Goal deleted successfully." });
-      handleGoalAddedOrUpdated(); // Re-fetch goals
+      handleGoalAddedOrUpdated(); 
     } catch (error: any) {
       console.error("Error deleting goal:", error);
       toast({ title: "Error", description: error.message || "Could not delete goal.", variant: "destructive" });
@@ -205,7 +221,7 @@ export default function GoalsSection() {
           open={isEditGoalDialogOpen}
           onOpenChange={(open) => {
             setIsEditGoalDialogOpen(open);
-            if (!open) setEditingGoal(null); // Clear editing goal when dialog closes
+            if (!open) setEditingGoal(null); 
           }}
           onGoalUpdated={handleGoalAddedOrUpdated}
         />

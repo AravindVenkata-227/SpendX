@@ -1,8 +1,10 @@
 
 import { db } from '@/lib/firebase';
-import type { TransactionFirestore, MonthlySummary, TransactionUpdateData } from '@/types';
-import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import type { TransactionFirestore, MonthlySummary, TransactionUpdateData, PaginatedTransactionsResult } from '@/types';
+import { collection, addDoc, getDocs, query, where, orderBy, Timestamp, doc, updateDoc, deleteDoc, limit, startAfter, DocumentSnapshot, getDoc } from 'firebase/firestore';
 import { startOfMonth, endOfMonth, formatISO, parseISO } from 'date-fns';
+
+const TRANSACTIONS_PAGE_LIMIT = 10;
 
 /**
  * Adds a new transaction to Firestore.
@@ -45,33 +47,52 @@ export async function addTransaction(transactionData: Omit<TransactionFirestore,
 }
 
 /**
- * Fetches transactions for a specific account ID and user ID from Firestore, ordered by date descending.
+ * Fetches transactions for a specific account ID and user ID from Firestore, ordered by date descending, with pagination.
  * @param accountId - The ID of the account to fetch transactions for.
  * @param userId - The ID of the authenticated user.
- * @returns A promise that resolves to an array of transactions.
+ * @param lastVisibleDoc - The last document snapshot from the previous fetch, for pagination.
+ * @returns A promise that resolves to an object containing transactions and the last document snapshot.
  */
-export async function getTransactionsByAccountId(accountId: string, userId: string): Promise<TransactionFirestore[]> {
+export async function getTransactionsByAccountId(
+  accountId: string,
+  userId: string,
+  lastVisibleDoc: DocumentSnapshot | null = null
+): Promise<PaginatedTransactionsResult> {
   if (!accountId) {
-    return [];
+    return { transactions: [], lastDoc: null };
   }
   if (!userId) {
     console.warn("getTransactionsByAccountId called with no userId");
-    return [];
+    return { transactions: [], lastDoc: null };
   }
   try {
     const transactionsCol = collection(db, 'transactions');
-    const q = query(
-      transactionsCol,
-      where('accountId', '==', accountId),
-      where('userId', '==', userId),
-      orderBy('date', 'desc')
-    );
+    let q;
+    if (lastVisibleDoc) {
+      q = query(
+        transactionsCol,
+        where('accountId', '==', accountId),
+        where('userId', '==', userId),
+        orderBy('date', 'desc'),
+        startAfter(lastVisibleDoc),
+        limit(TRANSACTIONS_PAGE_LIMIT)
+      );
+    } else {
+      q = query(
+        transactionsCol,
+        where('accountId', '==', accountId),
+        where('userId', '==', userId),
+        orderBy('date', 'desc'),
+        limit(TRANSACTIONS_PAGE_LIMIT)
+      );
+    }
+
     const querySnapshot = await getDocs(q);
     const transactions: TransactionFirestore[] = [];
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
+    querySnapshot.forEach((docSnap) => { // Renamed doc to docSnap to avoid conflict with DocumentSnapshot type
+      const data = docSnap.data();
       transactions.push({
-        id: doc.id,
+        id: docSnap.id,
         userId: data.userId,
         accountId: data.accountId,
         date: data.date, 
@@ -82,18 +103,19 @@ export async function getTransactionsByAccountId(accountId: string, userId: stri
         iconName: data.iconName,
       } as TransactionFirestore);
     });
-    return transactions;
+    const newLastDoc = querySnapshot.docs[querySnapshot.docs.length - 1] || null;
+    return { transactions, lastDoc: newLastDoc };
   } catch (e: any) {
     console.error(`Error fetching transactions for account ${accountId}, user ${userId}: `, e);
-    let detailedMessage = "Could not fetch transactions. Check server logs for details.";
+    let detailedMessage = "Could not fetch transactions.";
     if (e.code === 'permission-denied') {
         detailedMessage = "Permission denied fetching transactions. Check Firestore rules and ensure data has correct userId.";
-    } else if (e.message && (e.message.toLowerCase().includes('index') || e.message.toLowerCase().includes('index'))) {
+    } else if (e.message && (e.message.toLowerCase().includes('index') || e.message.toLowerCase().includes('missing or insufficient permissions')) ) {
         detailedMessage = "Missing or insufficient Firestore index for fetching transactions. Check Firestore logs for details and a link to create it.";
     } else if (e.message) {
         detailedMessage = e.message;
     }
-    throw new Error(detailedMessage);
+    throw new Error(detailedMessage + " Check server logs for details (e.g., Firestore permissions or missing indexes).");
   }
 }
 
@@ -118,23 +140,26 @@ export async function updateTransaction(transactionId: string, userId: string, u
   
   const dataToUpdate = { ...updateData };
 
-  // If amount and type are part of the update, adjust the amount's sign
   if (dataToUpdate.amount !== undefined && dataToUpdate.type !== undefined) {
     dataToUpdate.amount = dataToUpdate.type === 'debit' ? -Math.abs(dataToUpdate.amount) : Math.abs(dataToUpdate.amount);
   } else if (dataToUpdate.amount !== undefined && updateData.type === undefined) {
-    // If only amount is updated, we need the original type to set the sign,
-    // or assume the service is called with type if amount is changing.
-    // This scenario is tricky without fetching the original doc.
-    // Best practice: Ensure UI sends both new amount AND new type if either changes.
-    // For now, we'll assume if amount is present, type is also present or doesn't need to change sign.
-    // If type is NOT in updateData, but amount IS, this could lead to wrong sign if type should have flipped.
-    // This is why EditTransactionDialog should submit both if amount or type changes.
-    console.warn("Updating amount without type might lead to incorrect sign if type should also change.");
+    console.warn("Updating amount without type might lead to incorrect sign if type should also change. Fetching original type.");
+    try {
+      const docSnap = await getDoc(transactionRef);
+      if (docSnap.exists()) {
+        const originalType = docSnap.data().type;
+        dataToUpdate.amount = originalType === 'debit' ? -Math.abs(dataToUpdate.amount) : Math.abs(dataToUpdate.amount);
+      } else {
+        throw new Error("Original transaction not found to determine type for amount sign adjustment.");
+      }
+    } catch (fetchError) {
+       console.error("Error fetching original transaction for type adjustment:", fetchError);
+       throw new Error("Could not determine original transaction type for amount adjustment.");
+    }
   }
 
 
   try {
-    // Firestore rules should handle ownership verification (userId must match doc's userId)
     await updateDoc(transactionRef, dataToUpdate);
     console.log("Transaction updated with ID: ", transactionId);
   } catch (e: any) {
@@ -159,7 +184,6 @@ export async function deleteTransaction(transactionId: string, userId: string): 
   }
   const transactionRef = doc(db, 'transactions', transactionId);
   try {
-    // Firestore rules should handle ownership verification
     await deleteDoc(transactionRef);
     console.log("Transaction deleted with ID: ", transactionId);
   } catch (e: any) {
@@ -190,6 +214,8 @@ export async function getTransactionsForMonth(userId: string, year: number, mont
   
   try {
     const transactionsCol = collection(db, 'transactions');
+    // This query might fetch a large number of documents if a user has many transactions.
+    // For production, consider if this needs pagination or a summary directly from a backend aggregation if performance becomes an issue.
     const q = query(
       transactionsCol,
       where('userId', '==', userId),
@@ -199,10 +225,10 @@ export async function getTransactionsForMonth(userId: string, year: number, mont
 
     const querySnapshot = await getDocs(q);
     const transactions: TransactionFirestore[] = [];
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
+    querySnapshot.forEach((docSnap) => { // Renamed doc to docSnap
+      const data = docSnap.data();
       transactions.push({
-        id: doc.id,
+        id: docSnap.id,
         userId: data.userId, 
         accountId: data.accountId,
         date: data.date,
@@ -216,22 +242,21 @@ export async function getTransactionsForMonth(userId: string, year: number, mont
     return transactions;
   } catch (e: any) {
     console.error(`Error fetching transactions for month for user ${userId}, ${year}-${month}: `, e);
-    let detailedMessage = "Could not fetch monthly transactions. Check server logs for details.";
+    let detailedMessage = "Could not fetch monthly transactions.";
      if (e.code === 'permission-denied') {
         detailedMessage = "Permission denied fetching monthly transactions. Check Firestore rules and ensure data has correct userId.";
-    } else if (e.message && (e.message.toLowerCase().includes('index') || e.message.toLowerCase().includes('index'))) {
+    } else if (e.message && (e.message.toLowerCase().includes('index') || e.message.toLowerCase().includes('missing or insufficient permissions')) ) {
         detailedMessage = "Missing or insufficient Firestore index for fetching monthly transactions. Check Firestore logs for details and a link to create it.";
     } else if (e.message) {
         detailedMessage = e.message;
     }
-    throw new Error(detailedMessage);
+    throw new Error(detailedMessage + " Check server logs for details.");
   }
 }
 
 
 /**
- * Fetches all transactions for a specific user for a given month and year,
- * and calculates total income, total expenses, and net savings.
+ * Calculates total income, total expenses, and net savings for a specific user for a given month and year.
  * @param userId - The ID of the authenticated user.
  * @param year - The year for which to fetch the summary.
  * @param month - The month (1-12) for which to fetch the summary.
@@ -263,16 +288,15 @@ export async function getMonthlySummary(userId: string, year: number, month: num
       netSavings,
     };
   } catch (e: any) {
-    let detailedMessage = `Could not calculate monthly summary. Error: ${e.message}`;
-     if (e.code === 'permission-denied') {
+    let detailedMessage = `Could not calculate monthly summary.`;
+     if (e.message && e.message.toLowerCase().includes('permission denied')) {
         detailedMessage = "Permission denied calculating monthly summary. Check Firestore rules.";
-    } else if (e.message && (e.message.toLowerCase().includes('index') || e.message.toLowerCase().includes('index'))) {
+    } else if (e.message && (e.message.toLowerCase().includes('index') || e.message.toLowerCase().includes('missing or insufficient permissions'))) {
         detailedMessage = "Missing or insufficient Firestore index for monthly summary. Check server logs.";
     } else if (e.message) {
-        detailedMessage = e.message;
+        detailedMessage += ` Error: ${e.message}`;
     }
     console.error(`Error calculating monthly summary for user ${userId}, ${year}-${month}: `, e);
-    throw new Error(detailedMessage);
+    throw new Error(detailedMessage + " Check server logs for details.");
   }
 }
-

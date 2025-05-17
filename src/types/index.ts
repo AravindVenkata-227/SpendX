@@ -1,6 +1,6 @@
 
 import type { LucideIcon } from 'lucide-react';
-import type { Timestamp } from 'firebase/firestore';
+import type { Timestamp, DocumentSnapshot } from 'firebase/firestore'; // Added DocumentSnapshot
 import { Plane, Home, Car, Smartphone, BookOpen, ShoppingCart, ShieldCheck, Gift, Target } from 'lucide-react';
 
 // Represents a transaction as stored in Firestore
@@ -26,6 +26,12 @@ export interface UITransactionType extends Omit<TransactionFirestore, 'iconName'
 // Data for updating a transaction, excluding non-updatable fields like id, userId, accountId
 export type TransactionUpdateData = Partial<Omit<TransactionFirestore, 'id' | 'userId' | 'accountId'>>;
 
+// Result type for paginated transaction fetching
+export interface PaginatedTransactionsResult {
+  transactions: TransactionFirestore[];
+  lastDoc: DocumentSnapshot | null;
+}
+
 
 export interface Goal {
   id: string;
@@ -50,7 +56,7 @@ export const GoalIcons: { name: string; icon: LucideIcon; iconName: string }[] =
   { name: "New Car", icon: Car, iconName: "Car" },
   { name: "Gadget", icon: Smartphone, iconName: "Smartphone" },
   { name: "Education", icon: BookOpen, iconName: "BookOpen" },
-  { name: "Shopping", icon: ShoppingCart, iconName: "ShoppingBag" },
+  { name: "Shopping", icon: ShoppingCart, iconName: "ShoppingBag" }, // Note: ShoppingBag was a name, icon is ShoppingCart
   { name: "Savings/Emergency", icon: ShieldCheck, iconName: "ShieldCheck" },
   { name: "Gift", icon: Gift, iconName: "Gift" },
   { name: "Other", icon: Target, iconName: "Target" },
@@ -77,7 +83,7 @@ export interface NotificationPreferences {
   onOverspending: boolean;
   onLargeTransactions: boolean;
   onSavingsOpportunities: boolean;
-  emailForAISuggestions?: boolean; // Added for AI insight emails
+  emailForAISuggestions?: boolean;
 }
 
 // Represents a user profile as stored in Firestore

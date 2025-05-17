@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import type { UITransactionType, TransactionFirestore, Account as FirestoreAccount, UIAccount, AccountType } from "@/types";
+import type { UITransactionType, TransactionFirestore, Account as FirestoreAccount, UIAccount, AccountType, PaginatedTransactionsResult } from "@/types";
 import { getTransactionsByAccountId, deleteTransaction } from '@/services/transactionService';
 import { getAccountsByUserId, deleteAccount as deleteAccountService } from '@/services/accountService'; 
 import { auth } from '@/lib/firebase';
@@ -71,6 +71,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseISO, isValid } from 'date-fns';
+import type { DocumentSnapshot } from 'firebase/firestore';
+
 
 const categoryIcons: { [key: string]: React.ElementType } = {
   Food: Utensils,
@@ -115,10 +117,19 @@ const mapFirestoreAccountToUIAccount = (account: FirestoreAccount): UIAccount =>
 
 const mapFirestoreTransactionToUI = (transaction: TransactionFirestore): UITransactionType => {
   const IconComponent = categoryIcons[transaction.category] || categoryIcons[transaction.iconName as keyof typeof categoryIcons] || categoryIcons.Default;
+  let formattedDate = transaction.date;
+  try {
+    const parsedDate = parseISO(transaction.date);
+    if (isValid(parsedDate)) {
+      formattedDate = parsedDate.toLocaleDateString();
+    }
+  } catch (e) {
+    // Keep original date string if parsing fails
+  }
   return {
     id: transaction.id!,
     accountId: transaction.accountId,
-    date: transaction.date, 
+    date: formattedDate, 
     description: transaction.description,
     category: transaction.category,
     amount: transaction.amount, 
@@ -135,12 +146,16 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [accounts, setAccounts] = useState<UIAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>(undefined);
+  
   const [transactions, setTransactions] = useState<UITransactionType[]>([]);
+  const [lastLoadedDoc, setLastLoadedDoc] = useState<DocumentSnapshot | null>(null);
+  const [hasMoreTransactions, setHasMoreTransactions] = useState(true);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+  const [isLoadingMoreTransactions, setIsLoadingMoreTransactions] = useState(false);
+
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const { toast } = useToast();
-  const [formattedDates, setFormattedDates] = useState<Record<string, string>>({});
-
+  
   const [editingTransaction, setEditingTransaction] = useState<UITransactionType | null>(null);
   const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
   const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
@@ -158,8 +173,9 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       if (!user) {
         setAccounts([]);
         setTransactions([]);
-        setFormattedDates({});
         setSelectedAccountId(undefined);
+        setLastLoadedDoc(null);
+        setHasMoreTransactions(true);
         setEditingAccount(null);
         setDeletingAccountId(null);
         setIsLoadingAccounts(false);
@@ -183,7 +199,8 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       } else if (uiAccounts.length === 0) {
         setSelectedAccountId(undefined);
         setTransactions([]); 
-        setFormattedDates({});
+        setLastLoadedDoc(null);
+        setHasMoreTransactions(false);
       }
       return uiAccounts; 
     } catch (error: any) {
@@ -191,7 +208,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       let toastMessage = error.message || "Could not fetch your accounts.";
       if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission denied'))) {
         toastMessage = "Permission denied fetching accounts. Ensure Firestore rules are deployed and allow access, and that account documents have the correct 'userId' matching the authenticated user.";
-      } else if (error.code === 'failed-precondition' || (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions')))) {
+      } else if (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions'))) {
          toastMessage = "Missing or insufficient Firestore index for fetching accounts. Check Firestore logs for details and a link to create it.";
       }
       toast({
@@ -202,7 +219,8 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       setAccounts([]);
       setSelectedAccountId(undefined);
       setTransactions([]); 
-      setFormattedDates({});
+      setLastLoadedDoc(null);
+      setHasMoreTransactions(false);
       return []; 
     } finally {
       setIsLoadingAccounts(false);
@@ -217,83 +235,73 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       setAccounts([]);
       setSelectedAccountId(undefined);
       setTransactions([]);
-      setFormattedDates({});
+      setLastLoadedDoc(null);
+      setHasMoreTransactions(true);
     }
   }, [currentUser, fetchAccounts]);
 
 
-  const fetchTransactions = useCallback(async (accountId: string | undefined, userId: string) => {
+  const fetchTransactionsBatch = useCallback(async (accountId: string | undefined, userId: string, lastDoc: DocumentSnapshot | null, initialLoad: boolean = false) => {
     if (!accountId || !userId) {
-      setTransactions([]);
-      setFormattedDates({});
+      if(initialLoad) setTransactions([]);
+      setLastLoadedDoc(null);
+      setHasMoreTransactions(false);
       setIsLoadingTransactions(false);
+      setIsLoadingMoreTransactions(false);
       return;
     }
-    setIsLoadingTransactions(true);
-    try {
-      const firestoreTransactions = await getTransactionsByAccountId(accountId, userId);
-      const uiTransactions = firestoreTransactions.map(mapFirestoreTransactionToUI);
-      setTransactions(uiTransactions);
 
-      const newFormattedDates: Record<string, string> = {};
-      uiTransactions.forEach(t => {
-         try {
-            const parsedDate = parseISO(t.date);
-            if (isValid(parsedDate)) {
-              newFormattedDates[t.id] = parsedDate.toLocaleDateString();
-            } else {
-              console.warn(`Invalid date string: ${t.date} for transaction ${t.id}`);
-              newFormattedDates[t.id] = t.date; 
-            }
-          } catch (e) {
-            console.warn(`Could not parse date string: ${t.date} for transaction ${t.id}`, e);
-            newFormattedDates[t.id] = t.date;
-          }
-      });
-      setFormattedDates(newFormattedDates);
+    if (initialLoad) {
+      setIsLoadingTransactions(true);
+      setTransactions([]); // Clear previous transactions on initial load or account switch
+    } else {
+      setIsLoadingMoreTransactions(true);
+    }
+
+    try {
+      const { transactions: newFirestoreTransactions, lastDoc: newLastDoc } = await getTransactionsByAccountId(accountId, userId, lastDoc);
+      const newUiTransactions = newFirestoreTransactions.map(mapFirestoreTransactionToUI);
       
-      const selectedAccount = accounts.find(acc => acc.id === accountId);
-      const selectedAccountName = selectedAccount ? selectedAccount.name : 'Selected Account';
-      
-      if (uiTransactions.length === 0 && accounts.length > 0) {
+      setTransactions(prev => initialLoad ? newUiTransactions : [...prev, ...newUiTransactions]);
+      setLastLoadedDoc(newLastDoc);
+      setHasMoreTransactions(newFirestoreTransactions.length === 10); // Assuming page limit is 10
+
+      if (initialLoad && newUiTransactions.length === 0 && accounts.length > 0) {
          toast({
           title: "No Transactions",
-          description: `No transactions found for ${selectedAccountName}.`,
+          description: `No transactions found for ${accounts.find(acc => acc.id === accountId)?.name || 'the selected account'}.`,
           variant: "default"
         });
       }
 
     } catch (error: any) {
       console.error("Failed to fetch transactions:", error);
-       let toastMessage = error.message || "Could not fetch transactions for the selected account.";
-        if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission denied'))) {
-            toastMessage = "Permission denied fetching transactions. Check Firestore rules and ensure data has correct userId.";
-        } else if (error.code === 'failed-precondition' || (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions')))) {
-            toastMessage = "Missing or insufficient Firestore index for fetching transactions. Check Firestore logs for details and a link to create it.";
-        }
       toast({
         title: "Error Loading Transactions",
-        description: toastMessage,
+        description: error.message || "Could not fetch transactions.",
         variant: "destructive",
       });
-      setTransactions([]);
-      setFormattedDates({});
+      if (initialLoad) setTransactions([]);
+      setHasMoreTransactions(false);
     } finally {
-      setIsLoadingTransactions(false);
+      if (initialLoad) setIsLoadingTransactions(false);
+      setIsLoadingMoreTransactions(false);
     }
   }, [toast, accounts]);
 
   useEffect(() => {
     if (currentUser && selectedAccountId) {
-        fetchTransactions(selectedAccountId, currentUser.uid);
+        fetchTransactionsBatch(selectedAccountId, currentUser.uid, null, true); // Initial load
     } else if (!selectedAccountId && accounts.length === 0) { 
         setTransactions([]);
-        setFormattedDates({});
+        setLastLoadedDoc(null);
+        setHasMoreTransactions(true);
     }
-  }, [selectedAccountId, currentUser, fetchTransactions, accounts.length]);
+  }, [selectedAccountId, currentUser, fetchTransactionsBatch, accounts.length]);
 
   const handleAccountChange = (accountId: string) => {
     setSelectedAccountId(accountId);
+    // Fetching will be triggered by the useEffect watching selectedAccountId
   };
 
   const refreshData = useCallback((isAccountChange: boolean = false, newSelectedAccountId?: string) => {
@@ -316,15 +324,16 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
         setSelectedAccountId(idToSelect); 
 
         if (idToSelect) { 
-          fetchTransactions(idToSelect, currentUser.uid);
+          fetchTransactionsBatch(idToSelect, currentUser.uid, null, true); // Full refresh for selected account
         } else {
           setTransactions([]); 
-          setFormattedDates({});
+          setLastLoadedDoc(null);
+          setHasMoreTransactions(false);
         }
-        onDataChange(); // Signal data has changed
+        onDataChange(); 
       });
     }
-  }, [currentUser, fetchAccounts, accounts, selectedAccountId, fetchTransactions, onDataChange]);
+  }, [currentUser, fetchAccounts, accounts, selectedAccountId, fetchTransactionsBatch, onDataChange]);
   
   const handleEditTransaction = (transaction: UITransactionType) => {
     setEditingTransaction(transaction);
@@ -394,6 +403,12 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       setIsEditAccountDialogOpen(false); 
       setDeletingAccountId(editingAccount.id); 
       setIsDeleteAccountDialogOpen(true); 
+    }
+  };
+
+  const handleLoadMoreTransactions = () => {
+    if (currentUser && selectedAccountId && hasMoreTransactions && !isLoadingMoreTransactions) {
+      fetchTransactionsBatch(selectedAccountId, currentUser.uid, lastLoadedDoc, false);
     }
   };
 
@@ -502,7 +517,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
                       <TableCell>
                         <Badge variant="outline">{transaction.category}</Badge>
                       </TableCell>
-                      <TableCell>{formattedDates[transaction.id] || transaction.date}</TableCell>
+                      <TableCell>{transaction.date}</TableCell> 
                       <TableCell
                         className={cn(
                           "text-right font-semibold",
@@ -530,6 +545,19 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
               </TableBody>
             </Table>
           </ScrollArea>
+            {hasMoreTransactions && !isLoadingMoreTransactions && (
+              <div className="flex justify-center my-4">
+                <Button onClick={handleLoadMoreTransactions} variant="outline">
+                  Load More Transactions
+                </Button>
+              </div>
+            )}
+            {isLoadingMoreTransactions && (
+              <div className="flex justify-center my-4">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <span className="ml-2">Loading more...</span>
+              </div>
+            )}
             {currentUser && selectedAccountId && accounts.length > 0 && (
                  <div className="flex justify-center mt-4">
                     <AddTransactionDialog 

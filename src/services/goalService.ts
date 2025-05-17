@@ -1,5 +1,4 @@
 
-'use server';
 import { db } from '@/lib/firebase';
 import type { Goal } from '@/types';
 import { collection, addDoc, getDocs, query, where, orderBy, serverTimestamp, Timestamp } from 'firebase/firestore';
@@ -39,7 +38,6 @@ export async function getGoalsByUserId(userId: string): Promise<Goal[]> {
   }
   try {
     const goalsCol = collection(db, 'goals');
-    // Order by name by default, can also order by createdAt
     const q = query(
       goalsCol,
       where('userId', '==', userId),
@@ -60,9 +58,9 @@ export async function getGoalsByUserId(userId: string): Promise<Goal[]> {
       } as Goal);
     });
     return goals;
-  } catch (e) {
+  } catch (e: any) {
     console.error(`Error fetching goals for user ${userId}: `, e);
-    throw new Error("Could not fetch goals. Check server logs for details (e.g., Firestore permissions or missing indexes).");
+    throw e;
   }
 }
 

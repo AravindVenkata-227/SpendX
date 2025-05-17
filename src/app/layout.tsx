@@ -17,7 +17,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}>
+      <body 
+        className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}
+        suppressHydrationWarning={true}
+      >
         {children}
         <ClientOnlyToaster />
       </body>

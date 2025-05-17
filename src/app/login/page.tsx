@@ -59,12 +59,11 @@ export default function LoginPage() {
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
                 <a
-                  href="#"
+                  href="/forgot-password"
                   className="text-xs text-primary hover:underline"
                   onClick={(e) => {
                     e.preventDefault();
-                    // Placeholder for forgot password logic
-                    console.log('Forgot password clicked');
+                    router.push('/forgot-password');
                   }}
                 >
                   Forgot password?

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { onAuthStateChanged, type User } from 'firebase/auth';
@@ -12,12 +12,57 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { ChevronLeft, UserCircle, Bell, Palette, Loader2 } from 'lucide-react';
+import { ChevronLeft, UserCircle, Bell, Palette, Loader2, Sun, Moon, Laptop } from 'lucide-react';
+
+type Theme = "light" | "dark" | "system";
 
 export default function SettingsPage() {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const router = useRouter();
+
+  // Mock states for preferences
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [pushNotifications, setPushNotifications] = useState(false);
+  
+  const [currentTheme, setCurrentTheme] = useState<Theme>("system");
+
+  const applyTheme = useCallback((theme: Theme) => {
+    const root = window.document.documentElement;
+    root.classList.remove("light", "dark");
+
+    if (theme === "system") {
+      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      root.classList.add(systemTheme);
+      localStorage.setItem("theme", "system");
+    } else {
+      root.classList.add(theme);
+      localStorage.setItem("theme", theme);
+    }
+    setCurrentTheme(theme);
+  }, []);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") as Theme | null;
+    if (savedTheme) {
+      applyTheme(savedTheme);
+    } else {
+      applyTheme("system"); // Default to system if no theme saved
+    }
+  }, [applyTheme]);
+
+  useEffect(() => {
+    if (currentTheme !== "system") return;
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = () => {
+      applyTheme("system"); // Re-apply system theme to reflect OS change
+    };
+
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, [currentTheme, applyTheme]);
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -30,11 +75,6 @@ export default function SettingsPage() {
     });
     return () => unsubscribe();
   }, [router]);
-
-  // Mock states for preferences
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [pushNotifications, setPushNotifications] = useState(false);
-  const [theme, setTheme] = useState("light");
 
 
   if (isLoadingAuth || !currentUser) {
@@ -136,22 +176,29 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="p-3 bg-muted/50 rounded-md">
                 <Label htmlFor="theme-select">Theme</Label>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Light and Dark mode theme selection will be available here. (Coming soon)
-                </p>
-                {/* Placeholder for theme selector */}
-                {/* 
-                <Select value={theme} onValueChange={setTheme}>
-                  <SelectTrigger id="theme-select" className="w-[180px] mt-2">
-                    <SelectValue placeholder="Select theme" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="light">Light</SelectItem>
-                    <SelectItem value="dark">Dark</SelectItem>
-                    <SelectItem value="system">System</SelectItem>
-                  </SelectContent>
-                </Select> 
-                */}
+                 <div className="flex gap-2 mt-2">
+                    <Button 
+                        variant={currentTheme === 'light' ? 'default' : 'outline'} 
+                        onClick={() => applyTheme('light')}
+                        className="flex-1"
+                    >
+                        <Sun className="mr-2 h-4 w-4" /> Light
+                    </Button>
+                    <Button 
+                        variant={currentTheme === 'dark' ? 'default' : 'outline'} 
+                        onClick={() => applyTheme('dark')}
+                        className="flex-1"
+                    >
+                        <Moon className="mr-2 h-4 w-4" /> Dark
+                    </Button>
+                    <Button 
+                        variant={currentTheme === 'system' ? 'default' : 'outline'} 
+                        onClick={() => applyTheme('system')}
+                        className="flex-1"
+                    >
+                        <Laptop className="mr-2 h-4 w-4" /> System
+                    </Button>
+                 </div>
               </div>
             </CardContent>
           </Card>
@@ -166,3 +213,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+

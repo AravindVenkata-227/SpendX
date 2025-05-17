@@ -21,17 +21,26 @@ import { getGoalsByUserId, deleteGoal } from '@/services/goalService';
 import { auth } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Plane, Smartphone, Target, Home, BookOpen, Car, Loader2, ShoppingBag, Gift, ShieldCheck } from "lucide-react";
+import { Plane, Smartphone, Target, Home, BookOpen, Car, Loader2, ShoppingBag, Gift, ShieldCheck } from "lucide-react"; // ShoppingBag might be an issue if not used or defined.
 import { useToast } from "@/hooks/use-toast";
 
 const goalIconComponents: { [key: string]: React.ElementType } = {
   Plane, Smartphone, ShieldCheck, Home, BookOpen, Car, ShoppingBag, Gift, Target,
-  ShieldAlert: ShieldCheck, 
+  // Ensure ShoppingBag is correctly mapped or replaced if it's not a direct Lucide icon name
+  // For example, if 'ShoppingBag' from types.ts GoalIcons actually means ShoppingCart icon:
+  // ShoppingBag: ShoppingCart, // Assuming ShoppingCart from lucide-react is intended
 };
 
 const mapFirestoreGoalToUIGoal = (firestoreGoal: FirestoreGoal): UIGoal => {
-  const iconKey = firestoreGoal.iconName === "ShieldAlert" ? "ShieldCheck" : firestoreGoal.iconName;
-  const IconComponent = goalIconComponents[iconKey] || goalIconComponents.Target;
+  let iconKey = firestoreGoal.iconName;
+  // Handle potential mismatches or aliases for icon names if necessary
+  if (iconKey === "ShoppingBag" && !goalIconComponents[iconKey]) {
+    iconKey = "ShoppingCart"; // Fallback or correct mapping
+  } else if (iconKey === "ShieldAlert" && !goalIconComponents[iconKey]) {
+    iconKey = "ShieldCheck";
+  }
+  
+  const IconComponent = goalIconComponents[iconKey] || goalIconComponents.Target; // Default to Target if no match
   return {
     id: firestoreGoal.id,
     userId: firestoreGoal.userId,
@@ -63,7 +72,7 @@ export default function GoalsSection() {
       const firestoreGoals = await getGoalsByUserId(userId);
       const uiGoals = firestoreGoals.map(mapFirestoreGoalToUIGoal);
       setGoals(uiGoals);
-      return uiGoals; // Return the fetched goals
+      return uiGoals; 
     } catch (error: any) {
       console.error("Failed to fetch goals in component:", error);
       toast({
@@ -72,7 +81,7 @@ export default function GoalsSection() {
         variant: "destructive",
       });
       setGoals([]);
-      return []; // Return empty on error
+      return []; 
     } finally {
       setIsLoading(false);
     }
@@ -80,10 +89,10 @@ export default function GoalsSection() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (previousUserIdRef.current !== user?.uid) {
-        // User has changed (new login, logout, or initial load)
-        // setHasShownNoGoalsToast(false); // Reset toast flag for new user session
-      }
+      // if (previousUserIdRef.current !== user?.uid) {
+      //   // User has changed (new login, logout, or initial load)
+      //   setHasShownNoGoalsToast(false); // Reset toast flag for new user session
+      // }
       setCurrentUser(user);
       previousUserIdRef.current = user?.uid;
 
@@ -100,7 +109,6 @@ export default function GoalsSection() {
     if (currentUser) {
       fetchGoals(currentUser.uid);
     } else {
-      // Ensure loading is false and goals are cleared if no user
       setIsLoading(false);
       setGoals([]);
     }

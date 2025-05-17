@@ -4,56 +4,51 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users Collection
-    // Users can read their own profile.
-    // Users can create their own profile.
-    // Users can update their own profile, but cannot change their email, id, or createdAt.
+    // Users Collection:
+    // - Anyone can create their own user profile (typically on signup).
+    // - Users can only read their own profile.
+    // - Users can only update their own profile, and cannot change their email, original ID or creation timestamp.
     match /users/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null && request.auth.uid == userId;
       // Allow update if the user is authenticated, owns the profile,
-      // AND the update operation itself is not trying to change 'id', 'email', or 'createdAt'
-      // to a *different* value than what's already there.
-      // This implicitly allows changes to other fields like 'fullName', 'photoURL', 'notificationPreferences'.
+      // AND they are not trying to change their email, original ID, or creation timestamp.
+      // Other fields like fullName, photoURL, notificationPreferences can be updated.
       allow update: if request.auth != null &&
                        request.auth.uid == userId &&
-                       (request.resource.data.id == resource.data.id) &&
-                       (request.resource.data.email == resource.data.email) &&
-                       (request.resource.data.createdAt == resource.data.createdAt);
-      // No delete rule for users by default, manage through Firebase Console or Admin SDK if needed
+                       request.resource.data.id == resource.data.id && 
+                       request.resource.data.email == resource.data.email &&
+                       request.resource.data.createdAt.toMillis() == resource.data.createdAt.toMillis();
+      // Generally, users should not be able to delete their own profiles directly through client SDK
+      // This should be handled by a backend process if needed, e.g., for GDPR.
+      allow delete: if false; 
     }
 
-    // Transactions Collection
-    // Users can only manage their own transactions.
+    // Transactions Collection:
+    // - Users can only manage their own transactions.
     match /transactions/{transactionId} {
-      allow read, write, update, delete: if request.auth != null &&
-                                      'userId' in resource.data && // Check for existing doc on read/update/delete
+      allow read, write, update, delete: if request.auth != null && 
                                       resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null &&
-                       'userId'in request.resource.data && // Check for incoming doc on create
+      allow create: if request.auth != null && 
                        request.resource.data.userId == request.auth.uid;
     }
 
-    // Goals Collection
-    // Users can only manage their own goals.
+    // Goals Collection:
+    // - Users can only manage their own goals.
     match /goals/{goalId} {
-      allow read, write, update, delete: if request.auth != null &&
-                                   'userId' in resource.data &&
+      allow read, write, update, delete: if request.auth != null && 
                                    resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null &&
-                     'userId'in request.resource.data &&
-                     request.resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+                       request.resource.data.userId == request.auth.uid;
     }
-
-    // Accounts Collection
-    // Users can only manage their own accounts.
+    
+    // Accounts Collection:
+    // - Users can only manage their own accounts.
     match /accounts/{accountId} {
-       allow read, write, update, delete: if request.auth != null &&
-                                   'userId' in resource.data &&
+      allow read, write, update, delete: if request.auth != null && 
                                    resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null &&
-                     'userId'in request.resource.data &&
-                     request.resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && 
+                       request.resource.data.userId == request.auth.uid;
     }
   }
 }

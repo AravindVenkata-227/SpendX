@@ -123,9 +123,13 @@ export default function SettingsPage() {
       toast({ title: "Preferences Updated", description: "Your notification preferences have been saved." });
     } catch (error: any) {
       console.error("Error updating notification preferences:", error);
+      let description = `Failed to save notification preferences. Reason: ${error.message || "Unknown error."}`;
+      if (error.message && error.message.toLowerCase().includes('permission denied')) {
+        description = "Permission Denied: Could not save preferences. Please ensure Firestore rules are deployed correctly and your user data (especially 'createdAt' timestamp) is valid.";
+      }
       toast({
         title: "Error Updating Preferences",
-        description: `Failed to save notification preferences. Reason: ${error.message || "Unknown error."}`,
+        description: description,
         variant: "destructive",
       });
       // Revert optimistic UI update - fetch fresh profile data to ensure UI consistency

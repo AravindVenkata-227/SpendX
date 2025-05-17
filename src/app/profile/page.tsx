@@ -27,6 +27,7 @@ export default function ProfilePage() {
         setCurrentUser(user);
         try {
           const profile = await getUserProfile(user.uid);
+          console.log('Fetched profile in ProfilePage:', profile); // Diagnostic log
           setUserProfile(profile);
         } catch (error: any) {
           console.error("Error fetching user profile in ProfilePage:", error);
@@ -38,7 +39,7 @@ export default function ProfilePage() {
           setUserProfile(null);
         }
       } else {
-        router.push('/login'); 
+        router.push('/login');
       }
       setIsLoading(false);
     });
@@ -92,9 +93,9 @@ export default function ProfilePage() {
       <Card className="w-full max-w-lg shadow-2xl">
         <CardHeader className="items-center text-center">
           <Avatar className="h-24 w-24 mb-4 border-2 border-primary">
-            <AvatarImage 
-              src={currentUser ? `https://placehold.co/96x96.png?text=${getInitials(userProfile?.fullName, currentUser.email)}` : "https://placehold.co/96x96.png"} 
-              alt="User Avatar" 
+            <AvatarImage
+              src={currentUser ? `https://placehold.co/96x96.png?text=${getInitials(userProfile?.fullName, currentUser.email)}` : "https://placehold.co/96x96.png"}
+              alt="User Avatar"
               data-ai-hint="user avatar large"
             />
             <AvatarFallback className="text-3xl">
@@ -141,6 +142,7 @@ export default function ProfilePage() {
               <p className="font-semibold">Profile Information Not Available</p>
               <p className="text-xs mt-1">
                 We couldn't load your detailed profile information (e.g., Full Name, Joined Date) from our records.
+                This might happen if the profile wasn't created during signup or if there's an issue accessing it.
               </p>
               {currentUser?.email && (
                 <div className="mt-4 space-y-2">
@@ -151,7 +153,7 @@ export default function ProfilePage() {
                 </div>
               )}
                <p className="text-xs mt-3">
-                If you just signed up, it might take a moment for the full profile to be created. Otherwise, please contact support if this persists.
+                If you just signed up, it might take a moment for the full profile to be created. Otherwise, please check your server console logs for any Firestore errors and contact support if this persists.
               </p>
             </div>
           )}

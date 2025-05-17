@@ -8,7 +8,7 @@ import { getAccountsByUserId, deleteAccount as deleteAccountService } from '@/se
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import AddAccountDialog from './add-account-dialog';
-import EditAccountDialog from './edit-account-dialog'; // Import EditAccountDialog
+import EditAccountDialog from './edit-account-dialog'; 
 import AddTransactionDialog from './add-transaction-dialog';
 import EditTransactionDialog from './edit-transaction-dialog'; 
 import {
@@ -67,7 +67,7 @@ import {
   Gift,
   Pencil, 
   Trash2, 
-  Edit3, // Using Edit3 for account edit for slight visual difference
+  Edit3, 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseISO, isValid } from 'date-fns';
@@ -281,15 +281,19 @@ export default function RecentTransactionsTableCard() {
   const refreshData = (isAccountChange: boolean = false) => {
     if (currentUser) {
       fetchAccounts(currentUser.uid).then(() => {
-        // If it's not an account change (like adding a new account),
-        // and a selected account still exists or a new one is selected, fetch its transactions.
         if (!isAccountChange && selectedAccountId) {
            fetchTransactions(selectedAccountId, currentUser.uid);
-        } else if (isAccountChange && accounts.length > 0 && !accounts.find(a => a.id === selectedAccountId)) {
-            // If the selected account was deleted, select the first available account.
-            setSelectedAccountId(accounts[0].id);
-        } else if (isAccountChange && accounts.length === 0) {
-            setSelectedAccountId(undefined);
+        } else if (isAccountChange) {
+            const currentAccounts = accounts; // Use the state variable 'accounts' which will be updated by fetchAccounts
+            if (currentAccounts.length > 0 && !currentAccounts.find(a => a.id === selectedAccountId)) {
+                setSelectedAccountId(currentAccounts[0].id);
+            } else if (currentAccounts.length === 0) {
+                setSelectedAccountId(undefined);
+                setTransactions([]); // Clear transactions if no accounts left
+            } else if (selectedAccountId) {
+                 // If selected account still exists, re-fetch its transactions
+                fetchTransactions(selectedAccountId, currentUser.uid);
+            }
         }
       });
     }
@@ -336,14 +340,23 @@ export default function RecentTransactionsTableCard() {
     try {
       await deleteAccountService(deletingAccountId, currentUser.uid);
       toast({ title: "Success", description: "Account deleted successfully." });
-      setSelectedAccountId(undefined); // Reset selected account
-      refreshData(true); // Pass true to indicate an account change that might require re-selecting
+      // Reset selected account and refresh, which will pick the first available or none
+      setSelectedAccountId(undefined); 
+      refreshData(true); 
     } catch (error: any) {
       console.error("Error deleting account:", error);
       toast({ title: "Error Deleting Account", description: error.message || "Could not delete account.", variant: "destructive" });
     } finally {
       setIsDeleteAccountDialogOpen(false);
       setDeletingAccountId(null);
+    }
+  };
+
+  const handleInitiateDeleteFromEditDialog = () => {
+    if (editingAccount) {
+      setIsEditAccountDialogOpen(false); // Close edit dialog
+      setDeletingAccountId(editingAccount.id); // Set ID for delete confirmation
+      setIsDeleteAccountDialogOpen(true); // Open delete confirmation dialog
     }
   };
 
@@ -385,15 +398,7 @@ export default function RecentTransactionsTableCard() {
                   <Edit3 className="h-4 w-4" />
                   <span className="sr-only">Edit Account</span>
                 </Button>
-                <Button variant="destructive" size="icon" onClick={() => {
-                  if (selectedAccountId) {
-                    setDeletingAccountId(selectedAccountId);
-                    setIsDeleteAccountDialogOpen(true);
-                  }
-                }} disabled={!selectedAccountId || isLoadingAccounts || isLoadingTransactions}>
-                  <Trash2 className="h-4 w-4" />
-                  <span className="sr-only">Delete Account</span>
-                </Button>
+                {/* Standalone Delete Account button removed from here */}
               </div>
             )}
              <AddAccountDialog currentUser={currentUser} onAccountAdded={() => refreshData(true)} />
@@ -554,10 +559,11 @@ export default function RecentTransactionsTableCard() {
             if (!open) setEditingAccount(null);
           }}
           onAccountUpdated={() => {
-            refreshData(true); // Pass true to indicate account list might have changed
+            refreshData(true); 
             setIsEditAccountDialogOpen(false);
             setEditingAccount(null);
           }}
+          onInitiateDelete={handleInitiateDeleteFromEditDialog} // Pass the new handler
         />
       )}
 
@@ -580,4 +586,3 @@ export default function RecentTransactionsTableCard() {
     </>
   );
 }
-

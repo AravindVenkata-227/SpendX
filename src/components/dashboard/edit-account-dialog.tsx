@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { updateAccount } from '@/services/accountService';
 import type { User } from 'firebase/auth';
 import { AccountTypes, type AccountType, type UIAccount, type AccountUpdateData } from '@/types';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Trash2 } from 'lucide-react';
 
 const accountTypeToIconMap: Record<AccountType, string> = {
   "Savings": "PiggyBank",
@@ -44,9 +44,10 @@ interface EditAccountDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAccountUpdated: () => void;
+  onInitiateDelete: () => void; // New prop to handle delete initiation
 }
 
-export default function EditAccountDialog({ currentUser, accountToEdit, open, onOpenChange, onAccountUpdated }: EditAccountDialogProps) {
+export default function EditAccountDialog({ currentUser, accountToEdit, open, onOpenChange, onAccountUpdated, onInitiateDelete }: EditAccountDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -89,6 +90,12 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
       toast({ title: "Error", description: error.message || "Could not update account.", variant: "destructive" });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDeleteClick = () => {
+    if (!isLoading) {
+      onInitiateDelete();
     }
   };
 
@@ -141,16 +148,28 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
               <p className="text-xs text-red-500 mt-1">{form.formState.errors.type.message}</p>
             )}
           </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={isLoading}>
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLoading ? 'Saving Changes...' : 'Save Changes'}
+          <DialogFooter className="justify-between sm:justify-between"> {/* Modified for spacing */}
+            <Button 
+              type="button" 
+              variant="destructive" 
+              onClick={handleDeleteClick} 
+              disabled={isLoading}
+              className="sm:mr-auto" // Pushes delete button to the left on sm screens and up
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Account
             </Button>
+            <div className="flex gap-2 mt-2 sm:mt-0"> {/* Group cancel and save */}
+              <DialogClose asChild>
+                <Button type="button" variant="outline" disabled={isLoading}>
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isLoading ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

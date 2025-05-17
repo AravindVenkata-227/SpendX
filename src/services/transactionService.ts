@@ -72,23 +72,28 @@ export async function getTransactionsByAccountId(accountId: string, userId: stri
     return transactions;
   } catch (e: any) {
     console.error(`Error fetching transactions for account ${accountId}, user ${userId}: `, e);
-    // Let original Firebase error propagate or be handled by the calling component
-    throw e; 
+    let detailedMessage = "Could not fetch transactions. Check server logs for details (e.g., Firestore permissions or missing indexes).";
+    if (e.code === 'permission-denied') {
+        detailedMessage = "Permission denied fetching transactions. Check Firestore rules.";
+    } else if (e.message && (e.message.includes('index') || e.message.includes('Index'))) {
+        detailedMessage = "Missing or insufficient Firestore index for fetching transactions. Check server logs for a link to create it.";
+    }
+    throw new Error(detailedMessage);
   }
 }
 
+
 /**
- * Fetches all transactions for a specific user for a given month and year,
- * and calculates total income, total expenses, and net savings.
+ * Fetches all transactions for a specific user for a given month and year.
  * @param userId - The ID of the authenticated user.
  * @param year - The year for which to fetch the summary.
  * @param month - The month (1-12) for which to fetch the summary.
- * @returns A promise that resolves to a MonthlySummary object.
+ * @returns A promise that resolves to an array of TransactionFirestore objects.
  */
-export async function getMonthlySummary(userId: string, year: number, month: number): Promise<MonthlySummary> {
+export async function getTransactionsForMonth(userId: string, year: number, month: number): Promise<TransactionFirestore[]> {
   if (!userId) {
-    console.warn("getMonthlySummary called with no userId");
-    return { totalIncome: 0, totalExpenses: 0, netSavings: 0 };
+    console.warn("getTransactionsForMonth called with no userId");
+    return [];
   }
 
   const firstDayOfMonth = new Date(year, month - 1, 1);
@@ -107,11 +112,49 @@ export async function getMonthlySummary(userId: string, year: number, month: num
     );
 
     const querySnapshot = await getDocs(q);
+    const transactions: TransactionFirestore[] = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      transactions.push({
+        id: doc.id,
+        // userId, accountId, date, description, category, amount, type, iconName
+        ...data
+      } as TransactionFirestore);
+    });
+    return transactions;
+  } catch (e: any) {
+    console.error(`Error fetching transactions for month for user ${userId}, ${year}-${month}: `, e);
+     let detailedMessage = "Could not fetch monthly transactions. Check server logs for details.";
+    if (e.code === 'permission-denied') {
+        detailedMessage = "Permission denied fetching monthly transactions. Check Firestore rules.";
+    } else if (e.message && (e.message.includes('index') || e.message.includes('Index'))) {
+        detailedMessage = "Missing or insufficient Firestore index for fetching monthly transactions.";
+    }
+    throw new Error(detailedMessage);
+  }
+}
+
+
+/**
+ * Fetches all transactions for a specific user for a given month and year,
+ * and calculates total income, total expenses, and net savings.
+ * @param userId - The ID of the authenticated user.
+ * @param year - The year for which to fetch the summary.
+ * @param month - The month (1-12) for which to fetch the summary.
+ * @returns A promise that resolves to a MonthlySummary object.
+ */
+export async function getMonthlySummary(userId: string, year: number, month: number): Promise<MonthlySummary> {
+  if (!userId) {
+    console.warn("getMonthlySummary called with no userId");
+    return { totalIncome: 0, totalExpenses: 0, netSavings: 0 };
+  }
+  
+  try {
+    const transactions = await getTransactionsForMonth(userId, year, month);
     let totalIncome = 0;
     let totalExpenses = 0;
 
-    querySnapshot.forEach((doc) => {
-      const transaction = doc.data() as TransactionFirestore;
+    transactions.forEach((transaction) => {
       if (transaction.type === 'credit') {
         totalIncome += transaction.amount;
       } else if (transaction.type === 'debit') {
@@ -127,7 +170,12 @@ export async function getMonthlySummary(userId: string, year: number, month: num
       netSavings,
     };
   } catch (e: any) {
-    console.error(`Error fetching monthly summary for user ${userId}, ${year}-${month}: `, e);
-    throw e;
+    // The error from getTransactionsForMonth is already specific.
+    // We re-throw it or throw a new one if needed.
+    console.error(`Error calculating monthly summary for user ${userId}, ${year}-${month}: `, e);
+    if (e instanceof Error && (e.message.includes('Permission denied') || e.message.includes('index'))) {
+      throw e; // rethrow specific errors from getTransactionsForMonth
+    }
+    throw new Error(`Could not calculate monthly summary. Original error: ${e.message}`);
   }
 }

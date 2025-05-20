@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import SummaryItemCard from "@/components/dashboard/summary-item-card";
-import { ShieldCheck, PiggyBank, TrendingDown, Activity, Loader2, TrendingUp, DollarSign } from "lucide-react";
+import { ShieldCheck, PiggyBank, TrendingDown, Activity, Loader2, TrendingUp, DollarSign, AlertTriangle } from "lucide-react"; // Added AlertTriangle
 import { calculateFinancialHealth, type FinancialHealthOutput } from '@/ai/flows/financial-health-flow';
 import { getMonthlySummary, type MonthlySummary } from '@/services/transactionService';
 import { auth } from '@/lib/firebase';
@@ -18,9 +18,13 @@ interface SummarySectionProps {
 export default function SummarySection({ refreshTrigger }: SummarySectionProps) {
   const [financialHealth, setFinancialHealth] = useState<FinancialHealthOutput | null>(null);
   const [isLoadingHealth, setIsLoadingHealth] = useState(true);
+  const [healthError, setHealthError] = useState<string | null>(null);
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [monthlySummary, setMonthlySummary] = useState<MonthlySummary | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -31,6 +35,8 @@ export default function SummarySection({ refreshTrigger }: SummarySectionProps) 
         setMonthlySummary(null);
         setIsLoadingHealth(false);
         setIsLoadingSummary(false);
+        setHealthError(null);
+        setSummaryError(null);
       }
     });
     return () => unsubscribe();
@@ -46,11 +52,15 @@ export default function SummarySection({ refreshTrigger }: SummarySectionProps) 
         toast({ title: "Authentication Error", description: "User ID missing for summary.", variant: "destructive" });
         setIsLoadingSummary(false);
         setIsLoadingHealth(false);
+        setSummaryError("User ID missing.");
+        setHealthError("User ID missing.");
         return;
     }
     console.log(`Fetching summaries for userId: ${user.uid}`);
     setIsLoadingSummary(true);
     setIsLoadingHealth(true);
+    setSummaryError(null);
+    setHealthError(null);
 
     let currentMonthlySummary: MonthlySummary | null = null;
     try {
@@ -61,17 +71,20 @@ export default function SummarySection({ refreshTrigger }: SummarySectionProps) 
       setMonthlySummary(currentMonthlySummary);
     } catch (error: any) {
       console.error("Error fetching monthly summary:", error);
+      const errorMessage = error.message || "Could not fetch monthly financial summary.";
       toast({
-        title: "Summary Error",
-        description: error.message || "Could not fetch monthly financial summary.",
+        title: "Failed to Load Monthly Summary",
+        description: errorMessage,
         variant: "destructive",
       });
-      setMonthlySummary({ totalIncome: 0, totalExpenses: 0, netSavings: 0 });
-      currentMonthlySummary = { totalIncome: 0, totalExpenses: 0, netSavings: 0 };
+      setMonthlySummary(null);
+      setSummaryError(errorMessage);
+      currentMonthlySummary = null; // Ensure it's null for health score calculation if fetch fails
     } finally {
       setIsLoadingSummary(false);
     }
 
+    // Proceed to calculate financial health even if summary fetch failed, using a default/empty summary
     try {
       let dynamicFinancialSummary = "User's current month financial overview:\n";
       if (currentMonthlySummary) {
@@ -102,12 +115,14 @@ export default function SummarySection({ refreshTrigger }: SummarySectionProps) 
       setFinancialHealth(result);
     } catch (error:any) {
       console.error("Error fetching financial health:", error);
+      const errorMessage = error.message || "Could not fetch AI financial health score.";
       toast({
-        title: "AI Health Score Error",
-        description: error.message || "Could not fetch AI financial health score.",
+        title: "Failed to Load AI Health Score",
+        description: errorMessage,
         variant: "destructive",
       });
-      setFinancialHealth({ score: 0, explanation: "Error loading score." });
+      setFinancialHealth(null);
+      setHealthError(errorMessage);
     } finally {
       setIsLoadingHealth(false);
     }
@@ -121,54 +136,66 @@ export default function SummarySection({ refreshTrigger }: SummarySectionProps) 
       setIsLoadingHealth(false);
       setMonthlySummary(null);
       setFinancialHealth(null);
+      setSummaryError(null);
+      setHealthError(null);
     }
   }, [currentUser, fetchAllSummaries, refreshTrigger]);
 
-  const renderSummaryValue = (value: number | undefined | null, isLoading: boolean) => {
+  const renderSummaryValue = (value: number | undefined | null, isLoading: boolean, error: string | null) => {
     if (isLoading) return <Loader2 className="h-5 w-5 animate-spin" />;
+    if (error) return <AlertTriangle className="h-5 w-5 text-destructive" title={error} />;
     if (!currentUser) return 'N/A';
     return formatCurrency(value);
   };
 
   const getHealthDescription = () => {
     if (isLoadingHealth) return "Calculating...";
+    if (healthError) return "Error loading";
     if (!currentUser) return "Log in to view";
     return financialHealth?.explanation || "Based on your habits";
   }
+
+  const renderHealthScore = () => {
+    if (isLoadingHealth) return <Loader2 className="h-5 w-5 animate-spin" />;
+    if (healthError) return <AlertTriangle className="h-5 w-5 text-destructive" title={healthError} />;
+    if (!currentUser) return 'N/A';
+    return `${financialHealth?.score || 0}/100`;
+  }
+
 
   return (
     <section aria-labelledby="summary-heading">
       <h2 id="summary-heading" className="sr-only">
         Financial Summary
       </h2>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryItemCard
           title="Financial Health"
-          value={isLoadingHealth || !currentUser ? <Loader2 className="h-5 w-5 animate-spin" /> : `${financialHealth?.score || 0}/100`}
+          value={renderHealthScore()}
           icon={ShieldCheck}
           iconColor="text-green-500"
           description={getHealthDescription()}
         />
         <SummaryItemCard
           title="Total Income (Month)"
-          value={renderSummaryValue(monthlySummary?.totalIncome, isLoadingSummary)}
+          value={renderSummaryValue(monthlySummary?.totalIncome, isLoadingSummary, summaryError)}
           icon={TrendingUp}
           iconColor="text-green-500"
-          description={isLoadingSummary || !currentUser ? "Fetching..." : "Current month's income"}
+          description={isLoadingSummary || !currentUser ? "Fetching..." : summaryError ? "Error" : "Current month's income"}
         />
         <SummaryItemCard
           title="Total Spent (Month)"
-          value={renderSummaryValue(monthlySummary?.totalExpenses, isLoadingSummary)}
+          value={renderSummaryValue(monthlySummary?.totalExpenses, isLoadingSummary, summaryError)}
           icon={TrendingDown}
           iconColor="text-red-500"
-          description={isLoadingSummary || !currentUser ? "Fetching..." : "Current month's expenses"}
+          description={isLoadingSummary || !currentUser ? "Fetching..." : summaryError ? "Error" : "Current month's expenses"}
         />
         <SummaryItemCard
           title="Net Saved (Month)"
-          value={renderSummaryValue(monthlySummary?.netSavings, isLoadingSummary)}
+          value={renderSummaryValue(monthlySummary?.netSavings, isLoadingSummary, summaryError)}
           icon={PiggyBank}
           iconColor="text-blue-500"
-          description={isLoadingSummary || !currentUser ? "Fetching..." : "Income minus expenses"}
+          description={isLoadingSummary || !currentUser ? "Fetching..." : summaryError ? "Error" : "Income minus expenses"}
         />
       </div>
     </section>

@@ -52,7 +52,7 @@ const formSchema = z.object({
   amount: z.coerce.number().positive({ message: "Amount must be positive." }),
   type: z.enum(['debit', 'credit'], { required_error: "Please select transaction type." }),
   category: z.enum(TransactionCategories, { required_error: "Please select a category." }),
-  date: z.date({ required_error: "Please select a date." }).nullable(), // Allow null for "Pick a date" state
+  date: z.date({ required_error: "Please select a date." }).nullable(),
 });
 
 interface EditTransactionDialogProps {
@@ -61,7 +61,7 @@ interface EditTransactionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onTransactionUpdated: () => void;
-  accountName?: string; 
+  accountName?: string;
 }
 
 export default function EditTransactionDialog({ currentUser, transactionToEdit, open, onOpenChange, onTransactionUpdated, accountName }: EditTransactionDialogProps) {
@@ -81,30 +81,27 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
 
   useEffect(() => {
     if (transactionToEdit && open) {
-      let transactionDate: Date | null = new Date(); 
-      const parsedDate = parseISO(transactionToEdit.date); // transactionToEdit.date is 'dd/MM/yyyy' from mapFirestoreTransactionToUI
-      // Attempt to parse from 'dd/MM/yyyy' if parseISO fails (which it will for dd/MM/yyyy)
-      // And also parse directly if it's already in yyyy-MM-dd
+      let transactionDate: Date | null = new Date();
       let dateToParse = transactionToEdit.date;
-      if (transactionToEdit.date.includes('/')) { // Likely dd/MM/yyyy
+      if (transactionToEdit.date.includes('/')) {
          const parts = transactionToEdit.date.split('/');
          if (parts.length === 3) {
-            dateToParse = `${parts[2]}-${parts[1]}-${parts[0]}`; // Convert to yyyy-MM-dd
+            dateToParse = `${parts[2]}-${parts[1]}-${parts[0]}`;
          }
       }
-      
+
       const finalParsedDate = parseISO(dateToParse);
 
       if (isValid(finalParsedDate)) {
         transactionDate = finalParsedDate;
       } else {
         console.warn("Invalid date string from transactionToEdit after attempting parse:", transactionToEdit.date, ". Defaulting to today.");
-        transactionDate = new Date(); 
+        transactionDate = new Date();
       }
 
       form.reset({
         description: transactionToEdit.description,
-        amount: Math.abs(transactionToEdit.amount), 
+        amount: Math.abs(transactionToEdit.amount),
         type: transactionToEdit.type,
         category: transactionToEdit.category as TransactionCategory,
         date: transactionDate,
@@ -126,10 +123,10 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
     try {
       const transactionAmount = values.type === 'debit' ? -Math.abs(values.amount) : Math.abs(values.amount);
       const iconName = categoryToIconMap[values.category as TransactionCategory] || "CircleDollarSign";
-      
+
       const updateData: TransactionUpdateData = {
         description: values.description,
-        amount: transactionAmount, 
+        amount: transactionAmount,
         type: values.type,
         category: values.category,
         date: format(values.date, 'yyyy-MM-dd'),
@@ -147,14 +144,14 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
       setIsLoading(false);
     }
   };
-  
-  const dialogDescription = accountName 
+
+  const dialogDescription = accountName
     ? `Edit transaction details for account: ${accountName}.`
     : "Edit transaction details.";
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
-      if (!isLoading) { 
+      if (!isLoading) {
         onOpenChange(isOpen);
       }
     }}>
@@ -172,7 +169,7 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
             {form.formState.errors.description && <p className="text-xs text-red-500 mt-1">{form.formState.errors.description.message}</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="amount-edit">Amount (₹)</Label>
               <Input id="amount-edit" type="number" step="0.01" placeholder="0.00" {...form.register('amount')} disabled={isLoading} className="mt-1" />
@@ -181,7 +178,7 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
             <div>
               <Label>Type</Label>
               <RadioGroup
-                value={form.watch('type')} 
+                value={form.watch('type')}
                 onValueChange={(value) => form.setValue('type', value as 'debit' | 'credit')}
                 className="flex items-center space-x-2 mt-2"
                 disabled={isLoading}
@@ -199,11 +196,11 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="category-edit">Category</Label>
               <Select
-                value={form.watch('category')} 
+                value={form.watch('category')}
                 onValueChange={(value) => form.setValue('category', value as TransactionCategory)}
                 disabled={isLoading}
               >

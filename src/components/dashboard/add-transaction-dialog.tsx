@@ -13,7 +13,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -54,13 +53,13 @@ const formSchema = z.object({
   amount: z.coerce.number().positive({ message: "Amount must be positive." }),
   type: z.enum(['debit', 'credit'], { required_error: "Please select transaction type." }),
   category: z.enum(TransactionCategories, { required_error: "Please select a category." }),
-  date: z.date({ required_error: "Please select a date." }).nullable(), // Allow null for "Pick a date" state
+  date: z.date({ required_error: "Please select a date." }).nullable(),
 });
 
 interface AddTransactionDialogProps {
   currentUser: User | null;
   selectedAccountId: string | undefined;
-  allAccounts: UIAccount[]; 
+  allAccounts: UIAccount[];
   onTransactionAdded: () => void;
 }
 
@@ -102,7 +101,7 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
     try {
       const transactionAmount = values.type === 'debit' ? -Math.abs(values.amount) : Math.abs(values.amount);
       const iconName = categoryToIconMap[values.category as TransactionCategory] || "CircleDollarSign";
-      
+
       await addTransaction({
         userId: currentUser.uid,
         accountId: selectedAccountId,
@@ -124,7 +123,7 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
       setIsLoading(false);
     }
   };
-  
+
   useEffect(() => {
     if (open) {
       form.reset({
@@ -141,8 +140,8 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button 
-          className="w-full sm:w-auto" 
+        <Button
+          className="w-full sm:w-auto"
           disabled={!currentUser || !selectedAccountId || allAccounts.length === 0 || isLoading}
         >
           <PlusCircle className="mr-2 h-4 w-4" /> Add Transaction
@@ -162,7 +161,7 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
             {form.formState.errors.description && <p className="text-xs text-red-500 mt-1">{form.formState.errors.description.message}</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="amount">Amount (₹)</Label>
               <Input id="amount" type="number" step="0.01" placeholder="0.00" {...form.register('amount')} disabled={isLoading} className="mt-1" />
@@ -189,7 +188,7 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="category">Category</Label>
               <Select

@@ -29,15 +29,12 @@ const ForgotPasswordPage: NextPage = () => {
         description: `If an account exists for ${email}, a password reset link has been sent. Please check your inbox.`,
         variant: 'default',
       });
-      setEmail(''); 
-      router.push('/login'); 
+      setEmail('');
+      router.push('/login');
     } catch (error: any) {
       console.error('Forgot password error:', error);
       let errorMessage = "Could not send password reset email. Please try again.";
       if (error.code === 'auth/user-not-found') {
-        // We typically don't reveal if an email exists or not for security reasons,
-        // so we can use the same generic message as the success case.
-        // Or, if preferred, a slightly different one, but this is a common practice.
         toast({
             title: 'Password Reset Link Sent',
             description: `If an account exists for ${email}, a password reset link has been sent. Please check your inbox.`,
@@ -45,8 +42,10 @@ const ForgotPasswordPage: NextPage = () => {
         });
         setEmail('');
         router.push('/login');
-        // Early return because we don't want to show a generic error toast below in this specific case.
+        setIsLoading(false); // Ensure loading state is reset
         return;
+      } else if (error.code === 'auth/unauthorized-domain') {
+        errorMessage = "This domain is not authorized for password resets. Please contact support.";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -112,8 +111,8 @@ const ForgotPasswordPage: NextPage = () => {
           </CardFooter>
         </form>
       </Card>
-      <footer className="py-6 px-4 md:px-6 mt-8">
-        <p className="text-center text-sm text-muted-foreground">
+      <footer className="py-6 px-4 md:px-6 mt-8 text-center">
+        <p className="text-sm text-muted-foreground">
           © {new Date().getFullYear()} FinTrack AI. All rights reserved.
         </p>
       </footer>

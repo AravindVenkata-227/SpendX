@@ -68,6 +68,7 @@ import {
   Pencil,
   Trash2,
   Edit3,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isValid, parseISO, format } from 'date-fns';
@@ -117,16 +118,23 @@ const mapFirestoreAccountToUIAccount = (account: FirestoreAccount): UIAccount =>
 
 const mapFirestoreTransactionToUI = (transaction: TransactionFirestore): UITransactionType => {
   const IconComponent = categoryIcons[transaction.category] || categoryIcons[transaction.iconName as keyof typeof categoryIcons] || categoryIcons.Default;
-  let formattedDate = transaction.date;
+  let formattedDate = transaction.date; // Default to original string if parsing fails
   try {
+    // Attempt to parse assuming YYYY-MM-DD first (from Firestore)
     const parsed = parseISO(transaction.date);
     if (isValid(parsed)) {
+      // Then format to DD/MM/YYYY for display
       formattedDate = format(parsed, 'dd/MM/yyyy');
     } else {
-      console.warn(`Could not parse date string "${transaction.date}" from Firestore for transaction ${transaction.id}. Using original string.`);
+      // If parseISO fails, it might already be in DD/MM/YYYY from a previous client-side format.
+      // We can try parsing it as DD/MM/YYYY to re-validate, but for display, we can use it if it's not ISO.
+      // However, it's better if data in Firestore is consistently YYYY-MM-DD.
+      // For now, if parseISO fails, we assume it's a displayable string or an error to be caught.
+      // A more robust solution would be to ensure date is always stored as YYYY-MM-DD or Timestamp.
+      // console.warn(`Could not parse date string "${transaction.date}" as ISO for transaction ${transaction.id}. Using original string.`);
     }
   } catch (e) {
-    console.warn(`Error parsing date string "${transaction.date}" for transaction ${transaction.id}: `, e);
+    // console.warn(`Error parsing date string "${transaction.date}" for transaction ${transaction.id}: `, e);
   }
   return {
     id: transaction.id!,
@@ -152,10 +160,14 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
   const [transactions, setTransactions] = useState<UITransactionType[]>([]);
   const [lastLoadedDoc, setLastLoadedDoc] = useState<DocumentSnapshot | null>(null);
   const [hasMoreTransactions, setHasMoreTransactions] = useState(true);
-  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+  
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false); // False initially, true when an account is selected
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
   const [isLoadingMoreTransactions, setIsLoadingMoreTransactions] = useState(false);
 
-  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const { toast } = useToast();
 
   const [editingTransaction, setEditingTransaction] = useState<UITransactionType | null>(null);
@@ -182,6 +194,18 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
         setDeletingAccountId(null);
         setIsLoadingAccounts(false);
         setIsLoadingTransactions(false);
+        setAccountsError(null);
+        setTransactionsError(null);
+
+        // Close all dialogs on logout
+        setIsEditTransactionDialogOpen(false);
+        setIsDeleteTransactionDialogOpen(false);
+        setIsEditAccountDialogOpen(false);
+        setIsDeleteAccountDialogOpen(false);
+        setEditingTransaction(null);
+        setDeletingTransactionId(null);
+        setEditingAccount(null);
+        setDeletingAccountId(null);
       }
     });
     return () => unsubscribe();
@@ -193,22 +217,24 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       setIsLoadingAccounts(false);
       setAccounts([]);
       setSelectedAccountId(undefined);
+      setAccountsError("User ID missing for fetching accounts.");
       return [];
     }
     console.log(`Fetching accounts for userId: ${userId}`);
     setIsLoadingAccounts(true);
+    setAccountsError(null);
     try {
       const firestoreAccounts = await getAccountsByUserId(userId);
       const uiAccounts = firestoreAccounts.map(mapFirestoreAccountToUIAccount);
       setAccounts(uiAccounts);
-      if (uiAccounts.length > 0 && !selectedAccountId) {
-        const currentSelectedExists = uiAccounts.some(acc => acc.id === selectedAccountId);
-        if(!currentSelectedExists) {
-          setSelectedAccountId(uiAccounts[0].id);
+      if (uiAccounts.length > 0) {
+        const currentSelectedStillExists = uiAccounts.some(acc => acc.id === selectedAccountId);
+        if (!currentSelectedStillExists) {
+          setSelectedAccountId(uiAccounts[0].id); // Default to first account if current selection is gone or none
         }
-      } else if (uiAccounts.length === 0) {
+      } else {
         setSelectedAccountId(undefined);
-        setTransactions([]);
+        setTransactions([]); // Clear transactions if no accounts
         setLastLoadedDoc(null);
         setHasMoreTransactions(false);
       }
@@ -216,13 +242,13 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
     } catch (error: any) {
       console.error("Failed to fetch accounts:", error);
       let toastMessage = error.message || "Could not fetch your accounts.";
-      if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission denied'))) {
+       if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission denied'))) {
         toastMessage = "Permission denied fetching accounts. Ensure Firestore rules are deployed and allow access, and that account documents have the correct 'userId' matching the authenticated user.";
       } else if (error.message && (error.message.toLowerCase().includes('index') || error.message.toLowerCase().includes('missing or insufficient permissions'))) {
          toastMessage = "Missing or insufficient Firestore index for fetching accounts. Check Firestore logs for details and a link to create it.";
       }
       toast({
-        title: "Error Loading Accounts",
+        title: "Failed to Load Accounts",
         description: toastMessage,
         variant: "destructive",
       });
@@ -231,24 +257,19 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       setTransactions([]);
       setLastLoadedDoc(null);
       setHasMoreTransactions(false);
+      setAccountsError(toastMessage);
       return [];
     } finally {
       setIsLoadingAccounts(false);
     }
-  }, [toast, selectedAccountId]);
+  }, [toast, selectedAccountId]); // selectedAccountId in deps to re-evaluate if it needs to be reset
 
   useEffect(() => {
     if (currentUser && currentUser.uid) {
       fetchAccounts(currentUser.uid);
-    } else if (!currentUser && !isLoadingAccounts) { // To avoid race condition on initial load
-      setAccounts([]);
-      setSelectedAccountId(undefined);
-      setTransactions([]);
-      setLastLoadedDoc(null);
-      setHasMoreTransactions(true);
-      setIsLoadingAccounts(false); // Ensure loading is false if no user
     }
-  }, [currentUser, fetchAccounts, isLoadingAccounts]);
+    // else handled by onAuthStateChanged
+  }, [currentUser, fetchAccounts]);
 
 
   const fetchTransactionsBatch = useCallback(async (accountId: string | undefined, userId: string, lastDoc: DocumentSnapshot | null, initialLoad: boolean = false) => {
@@ -258,6 +279,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       setHasMoreTransactions(false);
       setIsLoadingTransactions(false);
       setIsLoadingMoreTransactions(false);
+      setTransactionsError(null);
       return;
     }
     if (!userId) {
@@ -265,13 +287,17 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
         if(initialLoad) setTransactions([]);
         setIsLoadingTransactions(false);
         setIsLoadingMoreTransactions(false);
+        setTransactionsError("User ID missing for fetching transactions.");
         return;
     }
     console.log(`Fetching transactions for accountId: ${accountId}, userId: ${userId}, initialLoad: ${initialLoad}`);
 
     if (initialLoad) {
       setIsLoadingTransactions(true);
-      setTransactions([]);
+      setTransactions([]); // Clear previous transactions for the new account
+      setTransactionsError(null); // Clear previous errors
+      setLastLoadedDoc(null); // Reset pagination for new account
+      setHasMoreTransactions(true); // Assume there might be more initially
     } else {
       setIsLoadingMoreTransactions(true);
     }
@@ -284,46 +310,47 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       setLastLoadedDoc(newLastDoc);
       setHasMoreTransactions(newFirestoreTransactions.length === 10);
 
-      if (initialLoad && newUiTransactions.length === 0 && accounts.length > 0) {
+      if (initialLoad && newUiTransactions.length === 0 && accounts.length > 0 && !accountsError) {
          toast({
           title: "No Transactions",
-          description: `No transactions found for ${accounts.find(acc => acc.id === accountId)?.name || 'the selected account'}.`,
+          description: `No transactions found for ${accounts.find(acc => acc.id === accountId)?.name || 'the selected account'}. Add some!`,
           variant: "default"
         });
       }
 
     } catch (error: any) {
       console.error("Failed to fetch transactions:", error);
-      let errorMessage = "Could not fetch transactions.";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
+      let errorMessage = error.message || "Could not fetch transactions.";
       toast({
-        title: "Error Loading Transactions",
+        title: "Failed to Load Transactions",
         description: errorMessage,
         variant: "destructive",
       });
       if (initialLoad) setTransactions([]);
       setHasMoreTransactions(false);
+      setTransactionsError(errorMessage);
     } finally {
       if (initialLoad) setIsLoadingTransactions(false);
       setIsLoadingMoreTransactions(false);
     }
-  }, [toast, accounts]);
+  }, [toast, accounts, accountsError]); // accounts and accountsError added to deps for toast message context
 
   useEffect(() => {
     if (currentUser && currentUser.uid && selectedAccountId) {
-        fetchTransactionsBatch(selectedAccountId, currentUser.uid, null, true); // Initial load
-    } else if (!selectedAccountId && accounts.length === 0 && !isLoadingTransactions) {
+        fetchTransactionsBatch(selectedAccountId, currentUser.uid, null, true); // Initial load for selected account
+    } else if (!selectedAccountId && accounts.length > 0) {
+        // If no account is selected but accounts exist, clear transactions (or select first as fetchAccounts does)
         setTransactions([]);
         setLastLoadedDoc(null);
-        setHasMoreTransactions(true);
+        setHasMoreTransactions(true); // Or false, depending on desired state for "no account selected"
         setIsLoadingTransactions(false);
+        setTransactionsError(null);
     }
-  }, [selectedAccountId, currentUser, fetchTransactionsBatch, accounts.length, isLoadingTransactions]);
+  }, [selectedAccountId, currentUser, fetchTransactionsBatch, accounts.length]);
 
   const handleAccountChange = (accountId: string) => {
     setSelectedAccountId(accountId);
+    // Fetching transactions for the new accountId will be triggered by the useEffect watching selectedAccountId
   };
 
   const refreshData = useCallback((isAccountChange: boolean = false, newSelectedAccountId?: string) => {
@@ -333,30 +360,43 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
     }
     console.log(`Refreshing data for userId: ${currentUser.uid}, isAccountChange: ${isAccountChange}, newSelectedAccountId: ${newSelectedAccountId}`);
     fetchAccounts(currentUser.uid).then((fetchedAccs) => {
-        const currentFetchedAccounts = fetchedAccs || accounts;
+        const currentFetchedAccounts = fetchedAccs || accounts; // Use fetchedAccs if available, otherwise current state
 
         let idToSelect = selectedAccountId;
 
-        if (isAccountChange) {
+        if (isAccountChange) { // If the refresh was triggered by an account CUD operation
           if (newSelectedAccountId && currentFetchedAccounts.find(a => a.id === newSelectedAccountId)) {
-            idToSelect = newSelectedAccountId;
+            idToSelect = newSelectedAccountId; // Select the newly added/edited account
           } else if (currentFetchedAccounts.length > 0 && !currentFetchedAccounts.find(a => a.id === selectedAccountId)) {
+            // If current selection is gone (e.g., deleted) or wasn't set, default to first
             idToSelect = currentFetchedAccounts[0].id;
           } else if (currentFetchedAccounts.length === 0) {
-            idToSelect = undefined;
+            idToSelect = undefined; // No accounts left
           }
+        } else { // If it's a general refresh (e.g. transaction added/updated/deleted)
+            if (selectedAccountId && !currentFetchedAccounts.find(a => a.id === selectedAccountId)) {
+                // If current selected account no longer exists (e.g. deleted in another tab)
+                idToSelect = currentFetchedAccounts.length > 0 ? currentFetchedAccounts[0].id : undefined;
+            } else if (!selectedAccountId && currentFetchedAccounts.length > 0) {
+                // If no account was selected but now accounts exist
+                idToSelect = currentFetchedAccounts[0].id;
+            }
+            // Otherwise, keep current idToSelect (which is selectedAccountId)
         }
-
-        setSelectedAccountId(idToSelect);
-
-        if (idToSelect && currentUser && currentUser.uid) {
-          fetchTransactionsBatch(idToSelect, currentUser.uid, null, true);
-        } else {
-          setTransactions([]);
-          setLastLoadedDoc(null);
-          setHasMoreTransactions(false);
+        
+        // Only update selectedAccountId if it actually changes to trigger the transaction fetch effect
+        if (idToSelect !== selectedAccountId) {
+            setSelectedAccountId(idToSelect);
+        } else if (idToSelect && currentUser && currentUser.uid) {
+            // If selectedAccountId didn't change but we still need to refresh its transactions
+            fetchTransactionsBatch(idToSelect, currentUser.uid, null, true);
+        } else if (!idToSelect) {
+            setTransactions([]);
+            setLastLoadedDoc(null);
+            setHasMoreTransactions(false);
         }
-        onDataChange();
+        
+        onDataChange(); // Propagate data change up to dashboard page
       });
   }, [currentUser, fetchAccounts, accounts, selectedAccountId, fetchTransactionsBatch, onDataChange, toast]);
 
@@ -373,7 +413,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
     try {
       await deleteTransaction(deletingTransactionId, currentUser.uid);
       toast({ title: "Success", description: "Transaction deleted successfully." });
-      refreshData();
+      refreshData(); // Refresh transactions and summary
     } catch (error: any) {
       console.error("Error deleting transaction:", error);
       toast({ title: "Error Deleting Transaction", description: error.message || "Could not delete transaction.", variant: "destructive" });
@@ -402,21 +442,21 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
       toast({ title: "Error", description: "User, user ID, or account ID missing for deletion.", variant: "destructive" });
       return;
     }
-    const accountToDeleteId = deletingAccountId;
+    const accountToDeleteId = deletingAccountId; // Capture before resetting state
     try {
       await deleteAccountService(accountToDeleteId, currentUser.uid);
       toast({ title: "Success", description: "Account and its transactions deleted successfully." });
 
+      // Determine the next selected account ID *before* calling refreshData
       const remainingAccounts = accounts.filter(acc => acc.id !== accountToDeleteId);
       let nextSelectedId: string | undefined = undefined;
       if (remainingAccounts.length > 0) {
-        if (selectedAccountId === accountToDeleteId) {
           nextSelectedId = remainingAccounts[0].id;
-        } else {
-          nextSelectedId = selectedAccountId;
-        }
       }
-      refreshData(true, nextSelectedId);
+      
+      // Explicitly set selectedAccountId to trigger effect if needed, then refreshData handles fetching
+      setSelectedAccountId(nextSelectedId); 
+      refreshData(true, nextSelectedId); 
 
     } catch (error: any) {
       console.error("Error deleting account:", error);
@@ -429,7 +469,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
 
   const handleInitiateDeleteFromEditDialog = () => {
     if (editingAccount) {
-      setIsEditAccountDialogOpen(false);
+      setIsEditAccountDialogOpen(false); // Close edit dialog first
       setDeletingAccountId(editingAccount.id);
       setIsDeleteAccountDialogOpen(true);
     }
@@ -461,10 +501,11 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
               <div className="flex gap-2 items-center w-full sm:w-auto">
                 <Select onValueChange={handleAccountChange} value={selectedAccountId} disabled={!currentUser || accounts.length === 0 || isLoadingTransactions}>
                   <SelectTrigger className="flex-grow sm:w-[200px]" aria-label="Select Account">
-                    <SelectValue placeholder="Select account" />
+                    <SelectValue placeholder={accountsError ? "Error loading accounts" : "Select account"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {accounts.length === 0 && <SelectItem value="no-accounts" disabled>No accounts found</SelectItem>}
+                    {accounts.length === 0 && !accountsError && <SelectItem value="no-accounts" disabled>No accounts found</SelectItem>}
+                    {accountsError && <SelectItem value="error-accounts" disabled>Error loading accounts</SelectItem>}
                     {accounts.map(account => (
                       <SelectItem key={account.id} value={account.id}>
                         <div className="flex items-center gap-2">
@@ -486,7 +527,9 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
         </div>
         <CardDescription className="mt-2">
           {!currentUser ? "Please log in to view your transactions." :
+           accountsError ? <span className="text-destructive text-xs flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> {accountsError}</span> :
            accounts.length === 0 && !isLoadingAccounts ? "Add an account to start tracking transactions." :
+           transactionsError ? <span className="text-destructive text-xs flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> {transactionsError}</span> :
            `Your latest financial activities for ${accounts.find(acc => acc.id === selectedAccountId)?.name || 'the selected account'}.`}
         </CardDescription>
       </CardHeader>
@@ -500,10 +543,28 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
            <div className="flex items-center justify-center h-[300px]">
              <p className="text-muted-foreground">Login to see your transactions.</p>
            </div>
+        ) : accountsError ? (
+            <div className="flex flex-col items-center justify-center h-[300px] text-center">
+              <AlertTriangle className="h-10 w-10 text-destructive mb-3" />
+              <p className="font-semibold text-destructive">Failed to Load Accounts</p>
+              <p className="text-sm text-muted-foreground mt-1">{accountsError}</p>
+              <Button onClick={() => currentUser && fetchAccounts(currentUser.uid)} variant="outline" className="mt-4">
+                Try Again
+              </Button>
+            </div>
         ) : !selectedAccountId && accounts.length > 0 && !isLoadingAccounts ? (
             <div className="flex items-center justify-center h-[300px]">
              <p className="text-muted-foreground">Please select an account to view transactions.</p>
            </div>
+        ) : transactionsError ? (
+             <div className="flex flex-col items-center justify-center h-[300px] text-center">
+              <AlertTriangle className="h-10 w-10 text-destructive mb-3" />
+              <p className="font-semibold text-destructive">Failed to Load Transactions</p>
+              <p className="text-sm text-muted-foreground mt-1">{transactionsError}</p>
+              <Button onClick={() => currentUser && selectedAccountId && fetchTransactionsBatch(selectedAccountId, currentUser.uid, null, true)} variant="outline" className="mt-4">
+                Try Again
+              </Button>
+            </div>
         ) : (
           <>
           <ScrollArea className="h-[300px] mb-4">
@@ -522,8 +583,8 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
                 {transactions.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
-                      {accounts.length === 0 && !isLoadingAccounts ? "No accounts available. Please add one." :
-                       !selectedAccountId && !isLoadingAccounts ? "Select an account to see transactions." :
+                      {accounts.length === 0 && !isLoadingAccounts && !accountsError ? "No accounts available. Please add one." :
+                       !selectedAccountId && !isLoadingAccounts && !accountsError ? "Select an account to see transactions." :
                        "No transactions found for this account."}
                     </TableCell>
                   </TableRow>
@@ -587,7 +648,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
                 <span className="ml-2">Loading more...</span>
               </div>
             )}
-            {currentUser && selectedAccountId && accounts.length > 0 && (
+            {currentUser && selectedAccountId && accounts.length > 0 && !accountsError && (
                  <div className="flex justify-center mt-4">
                     <AddTransactionDialog
                         currentUser={currentUser}
@@ -597,7 +658,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
                     />
                 </div>
             )}
-            {!selectedAccountId && accounts.length === 0 && !isLoadingAccounts && currentUser && (
+            {!selectedAccountId && accounts.length === 0 && !isLoadingAccounts && !accountsError && currentUser && (
                  <div className="text-center text-muted-foreground mt-4">
                     Please add an account first to start adding transactions.
                  </div>
@@ -652,7 +713,7 @@ export default function RecentTransactionsTableCard({ onDataChange }: RecentTran
             if (!open) setEditingAccount(null);
           }}
           onAccountUpdated={() => {
-            refreshData(true, editingAccount?.id);
+            refreshData(true, editingAccount?.id); // Pass true and the edited account ID
             setIsEditAccountDialogOpen(false);
             setEditingAccount(null);
           }}

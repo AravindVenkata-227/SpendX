@@ -15,13 +15,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"; // Added CardDescription
 import type { UIGoal, Goal as FirestoreGoal } from "@/types";
 import { getGoalsByUserId, deleteGoal } from '@/services/goalService';
 import { auth } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Plane, Smartphone, Target, Home, BookOpen, Car, Loader2, ShoppingCart, Gift, ShieldCheck } from "lucide-react"; // Note: ShoppingCart is used for consistency
+import { Plane, Smartphone, Target, Home, BookOpen, Car, Loader2, ShoppingCart, Gift, ShieldCheck, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const goalIconComponents: { [key: string]: React.ElementType } = {
@@ -30,7 +30,7 @@ const goalIconComponents: { [key: string]: React.ElementType } = {
 
 const mapFirestoreGoalToUIGoal = (firestoreGoal: FirestoreGoal): UIGoal => {
   let iconKey = firestoreGoal.iconName;
-  if (iconKey === "ShoppingBag") { // Alias for ShoppingCart
+  if (iconKey === "ShoppingBag") {
     iconKey = "ShoppingCart";
   }
   const IconComponent = goalIconComponents[iconKey] || goalIconComponents.Target;
@@ -49,7 +49,8 @@ export default function GoalsSection() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [goals, setGoals] = useState<UIGoal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  // const [hasShownNoGoalsToast, setHasShownNoGoalsToast] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  // const [hasShownNoGoalsToast, setHasShownNoGoalsToast] = useState(false); // Commented out as per user request
   const [isAddGoalDialogOpen, setIsAddGoalDialogOpen] = useState(false);
   const [isEditGoalDialogOpen, setIsEditGoalDialogOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<UIGoal | null>(null);
@@ -64,10 +65,12 @@ export default function GoalsSection() {
         toast({ title: "Authentication Error", description: "User ID missing, cannot fetch goals.", variant: "destructive" });
         setIsLoading(false);
         setGoals([]);
+        setFetchError("User ID missing for fetching goals.");
         return [];
     }
     console.log(`Fetching goals for userId: ${userId}`);
     setIsLoading(true);
+    setFetchError(null); // Clear previous errors
     try {
       const firestoreGoals = await getGoalsByUserId(userId);
       const uiGoals = firestoreGoals.map(mapFirestoreGoalToUIGoal);
@@ -75,12 +78,14 @@ export default function GoalsSection() {
       return uiGoals;
     } catch (error: any) {
       console.error("Failed to fetch goals in component:", error);
+      const errorMessage = error.message || "Could not fetch your savings goals.";
       toast({
-        title: "Error Loading Goals",
-        description: error.message || "Could not fetch your savings goals. Check server logs (e.g., Firestore permissions/indexes).",
+        title: "Failed to Load Goals",
+        description: errorMessage,
         variant: "destructive",
       });
       setGoals([]);
+      setFetchError(errorMessage);
       return [];
     } finally {
       setIsLoading(false);
@@ -98,6 +103,7 @@ export default function GoalsSection() {
       if (!user) {
         setGoals([]);
         setIsLoading(false);
+        setFetchError(null); // Clear errors on logout
       }
     });
     return () => unsubscribe();
@@ -107,22 +113,20 @@ export default function GoalsSection() {
   useEffect(() => {
     if (currentUser && currentUser.uid) {
       fetchGoals(currentUser.uid);
-    } else if (!currentUser && !isLoading) { // Ensure isLoading is false before resetting
-      setGoals([]);
-      setIsLoading(false);
     }
-  }, [currentUser, fetchGoals, isLoading]);
+    // The else if for !currentUser is handled by onAuthStateChanged
+  }, [currentUser, fetchGoals]);
 
-  // useEffect(() => {
-  //   if (!isLoading && currentUser && goals.length === 0 && !hasShownNoGoalsToast) {
+  // useEffect(() => { // No goals toast commented out as per user request
+  //   if (!isLoading && currentUser && goals.length === 0 && !hasShownNoGoalsToast && !fetchError) {
   //     toast({
-  //       title: "No Savings Goals",
-  //       description: "You haven't set any savings goals yet. Click 'Add New Goal' to start!",
-  //       variant: "default"
+  //       title: "No Savings Goals Yet!",
+  //       description: "Click 'Add New Goal' to start planning your savings.",
+  //       variant: "default",
   //     });
   //     setHasShownNoGoalsToast(true);
   //   }
-  // }, [isLoading, currentUser, goals, hasShownNoGoalsToast, toast]);
+  // }, [isLoading, currentUser, goals, hasShownNoGoalsToast, toast, fetchError]);
 
 
   const handleAddGoalClick = () => {
@@ -136,7 +140,7 @@ export default function GoalsSection() {
   const handleGoalAddedOrUpdated = () => {
     if (currentUser && currentUser.uid) {
       fetchGoals(currentUser.uid);
-      // .then((newGoals) => {
+      // .then((newGoals) => { // Logic for toast commented out
       //   if (newGoals.length === 0) {
       //     setHasShownNoGoalsToast(false);
       //   } else {
@@ -182,6 +186,11 @@ export default function GoalsSection() {
             <Target className="h-6 w-6 text-primary" />
             <CardTitle>Savings Goals</CardTitle>
           </div>
+          {!isLoading && fetchError && (
+             <CardDescription className="text-destructive text-xs pt-1 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" /> {fetchError}
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -192,6 +201,15 @@ export default function GoalsSection() {
           ) : !currentUser ? (
             <div className="flex flex-col items-center justify-center h-[200px]">
               <p className="text-muted-foreground">Login to see your savings goals.</p>
+            </div>
+          ) : fetchError ? (
+            <div className="flex flex-col items-center justify-center h-[200px] text-center">
+              <AlertTriangle className="h-10 w-10 text-destructive mb-3" />
+              <p className="font-semibold text-destructive">Failed to Load Goals</p>
+              <p className="text-sm text-muted-foreground mt-1">{fetchError}</p>
+              <Button onClick={() => currentUser && fetchGoals(currentUser.uid)} variant="outline" className="mt-4">
+                Try Again
+              </Button>
             </div>
           ) : (
             <div className="space-y-4">

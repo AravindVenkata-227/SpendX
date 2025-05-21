@@ -165,11 +165,11 @@ export default function ProfilePage() {
                       onChange={(e) => setEditableFullName(e.target.value)}
                       className="text-lg p-3 bg-background rounded-md shadow-sm"
                     />
-                    <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:justify-end sm:gap-2">
-                      <Button variant="ghost" size="sm" onClick={handleCancelEditName} className="w-full sm:w-auto">
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="ghost" size="sm" onClick={handleCancelEditName}>
                         <XCircle className="mr-1 h-4 w-4" /> Cancel
                       </Button>
-                      <Button size="sm" onClick={handleSaveName} className="w-full sm:w-auto">
+                      <Button size="sm" onClick={handleSaveName}>
                         <Save className="mr-1 h-4 w-4" /> Save
                       </Button>
                     </div>
@@ -245,5 +245,3 @@ export default function ProfilePage() {
 
 import { Label as ShadLabel } from "@/components/ui/label";
 const Label = ShadLabel;
-
-    

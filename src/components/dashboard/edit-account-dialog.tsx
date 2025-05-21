@@ -47,7 +47,7 @@ interface EditAccountDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAccountUpdated: () => void;
-  onInitiateDelete: () => void;
+  onInitiateDelete: () => void; 
 }
 
 export default function EditAccountDialog({ currentUser, accountToEdit, open, onOpenChange, onAccountUpdated, onInitiateDelete }: EditAccountDialogProps) {
@@ -68,7 +68,7 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
       form.reset({
         name: accountToEdit.name,
         type: accountToEdit.type,
-        accountNumberLast4: accountToEdit.accountNumberLast4 || '',
+        accountNumberLast4: accountToEdit.accountNumberLast4 || '', // Ensure it defaults to string if null/undefined
       });
     }
   }, [accountToEdit, open, form]);
@@ -85,7 +85,7 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
         name: values.name,
         type: values.type as AccountType,
         iconName: iconName,
-        accountNumberLast4: values.accountNumberLast4,
+        accountNumberLast4: values.accountNumberLast4, // Now mandatory and will be a string
       };
       await updateAccount(accountToEdit.id, currentUser.uid, updateData);
       toast({ title: "Success", description: "Account updated successfully." });
@@ -109,7 +109,7 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
     <Dialog open={open} onOpenChange={(isOpen) => {
       if (!isLoading) {
         onOpenChange(isOpen);
-         if (!isOpen) form.reset();
+         if (!isOpen) form.reset(); // Reset form if dialog is closed
       }
     }}>
       <DialogContent className="sm:max-w-[425px]">
@@ -137,7 +137,7 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
             <Label htmlFor="type-edit">Account Type</Label>
             <Select
               onValueChange={(value) => form.setValue('type', value as AccountType)}
-              value={form.watch('type')}
+              value={form.watch('type')} 
               disabled={isLoading}
             >
               <SelectTrigger id="type-edit" className="mt-1">
@@ -172,24 +172,24 @@ export default function EditAccountDialog({ currentUser, accountToEdit, open, on
               <p className="text-xs text-destructive mt-1">{form.formState.errors.accountNumberLast4.message}</p>
             )}
           </div>
-          <DialogFooter className="flex flex-col space-y-2 sm:flex-row sm:justify-between sm:space-y-0 sm:space-x-2 pt-4">
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleDeleteClick}
+          <DialogFooter className="justify-between sm:justify-between"> 
+            <Button 
+              type="button" 
+              variant="destructive" 
+              onClick={handleDeleteClick} 
               disabled={isLoading}
-              className="w-full sm:w-auto sm:mr-auto order-last sm:order-first" // Order for mobile stacking
+              className="sm:mr-auto" 
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Delete Account
             </Button>
-            <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
-              <DialogClose asChild className="w-full sm:w-auto">
-                <Button type="button" variant="outline" disabled={isLoading} className="w-full sm:w-auto">
+            <div className="flex gap-2 mt-2 sm:mt-0"> 
+              <DialogClose asChild>
+                <Button type="button" variant="outline" disabled={isLoading}>
                   Cancel
                 </Button>
               </DialogClose>
-              <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
+              <Button type="submit" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isLoading ? 'Saving...' : 'Save Changes'}
               </Button>

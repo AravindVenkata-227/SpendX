@@ -49,7 +49,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false); // New loading state for Google
   const router = useRouter();
   const { toast } = useToast();
 
@@ -63,7 +63,7 @@ export default function LoginPage() {
         description: "Welcome back!",
         variant: "default",
       });
-      router.push('/');
+      router.push('/'); 
     } catch (error: any) {
       console.error('Login error:', error);
       toast({
@@ -83,8 +83,10 @@ export default function LoginPage() {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
+      // Check if user profile already exists, if not, create it
       const userProfile = await getUserProfile(user.uid);
       if (!userProfile) {
+        // Use displayName from Google, fallback to local part of email or 'New User' if null
         const fullName = user.displayName || user.email?.split('@')[0] || 'New User';
         const email = user.email;
         if (!email) {
@@ -104,16 +106,13 @@ export default function LoginPage() {
         variant: "default",
       });
       router.push('/');
-    } catch (error: any)
-{
+    } catch (error: any) {
       console.error('Google Sign-In error:', error);
       let description = "Could not sign in with Google. Please try again.";
       if (error.code === 'auth/popup-closed-by-user') {
         description = "Sign-in popup closed. Please try again.";
       } else if (error.code === 'auth/account-exists-with-different-credential') {
         description = "An account already exists with this email address but with a different sign-in method. Try logging in using that method.";
-      } else if (error.code === 'auth/unauthorized-domain') {
-        description = "This domain is not authorized for Google Sign-In. Please contact support.";
       } else if (error.message) {
         description = error.message;
       }
@@ -195,7 +194,7 @@ export default function LoginPage() {
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isLoading ? "Logging in..." : "Login"}
             </Button>
-
+            
             <div className="relative w-full">
               <Separator className="my-2" />
               <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
@@ -233,8 +232,8 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
-       <footer className="py-6 px-4 md:px-6 mt-8 text-center">
-        <p className="text-sm text-muted-foreground">
+       <footer className="py-6 px-4 md:px-6 mt-8">
+        <p className="text-center text-sm text-muted-foreground">
           © {new Date().getFullYear()} FinTrack AI. All rights reserved.
         </p>
       </footer>

@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
-  DialogTrigger, // Added DialogTrigger
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { addTransaction } from '@/services/transactionService';
 import type { User } from 'firebase/auth';
 import { TransactionCategories, type TransactionCategory, type UIAccount } from '@/types';
-import { Loader2, PlusCircle, Calendar as CalendarIcon, Utensils, FileText, ShoppingCart, Briefcase, Film, Car, BookOpen, Home, PiggyBank, Landmark, CreditCard, CircleDollarSign, HeartPulse, Building, Gift, Plane, TrendingUp } from 'lucide-react';
+import { Loader2, PlusCircle, Calendar as CalendarIcon, Utensils, FileText, ShoppingCart, Briefcase, Film, Car, BookOpen, Home, HeartPulse, Gift, Plane, TrendingUp, CircleDollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -159,14 +159,14 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
           <div>
             <Label htmlFor="description">Description</Label>
             <Input id="description" placeholder="e.g., Coffee, Salary" {...form.register('description')} disabled={isLoading} className="mt-1" />
-            {form.formState.errors.description && <p className="text-xs text-red-500 mt-1">{form.formState.errors.description.message}</p>}
+            {form.formState.errors.description && <p className="text-xs text-destructive mt-1">{form.formState.errors.description.message}</p>}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="amount">Amount (₹)</Label>
               <Input id="amount" type="number" step="0.01" placeholder="0.00" {...form.register('amount')} disabled={isLoading} className="mt-1" />
-              {form.formState.errors.amount && <p className="text-xs text-red-500 mt-1">{form.formState.errors.amount.message}</p>}
+              {form.formState.errors.amount && <p className="text-xs text-destructive mt-1">{form.formState.errors.amount.message}</p>}
             </div>
             <div>
               <Label>Type</Label>
@@ -185,7 +185,7 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
                   <Label htmlFor="credit" className="font-normal">Credit</Label>
                 </div>
               </RadioGroup>
-              {form.formState.errors.type && <p className="text-xs text-red-500 mt-1">{form.formState.errors.type.message}</p>}
+              {form.formState.errors.type && <p className="text-xs text-destructive mt-1">{form.formState.errors.type.message}</p>}
             </div>
           </div>
 
@@ -206,13 +206,14 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
                   ))}
                 </SelectContent>
               </Select>
-              {form.formState.errors.category && <p className="text-xs text-red-500 mt-1">{form.formState.errors.category.message}</p>}
+              {form.formState.errors.category && <p className="text-xs text-destructive mt-1">{form.formState.errors.category.message}</p>}
             </div>
             <div>
-              <Label htmlFor="date">Date</Label>
+              <Label htmlFor="date-add-transaction">Date</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
+                    id="date-add-transaction-trigger"
                     variant={"outline"}
                     className={cn("w-full justify-start text-left font-normal mt-1", !form.watch('date') && "text-muted-foreground")}
                     disabled={isLoading}
@@ -221,7 +222,7 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
                     {form.watch('date') ? format(form.watch('date')!, "PPP") : <span>Pick a date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
+                <PopoverContent className="w-auto p-0 z-[51]">
                   <Calendar
                     mode="single"
                     selected={form.watch('date')}
@@ -231,7 +232,7 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
                   />
                 </PopoverContent>
               </Popover>
-              {form.formState.errors.date && <p className="text-xs text-red-500 mt-1">{form.formState.errors.date.message}</p>}
+              {form.formState.errors.date && <p className="text-xs text-destructive mt-1">{form.formState.errors.date.message}</p>}
             </div>
           </div>
 
@@ -251,3 +252,5 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
     </Dialog>
   );
 }
+
+    

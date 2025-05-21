@@ -61,8 +61,25 @@ const financialHealthFlow = ai.defineFlow(
     outputSchema: FinancialHealthOutputSchema,
   },
   async (input) => {
-    const {output} = await calculateHealthScorePrompt(input);
-    // Ensure a default score, explanation, and tips if the output is somehow null
-    return output || { score: 0, explanation: "Could not calculate score due to an unexpected error.", improvementTips: ["Review spending habits.", "Consider creating a budget."] };
+    try {
+      const {output} = await calculateHealthScorePrompt(input);
+      // Ensure a default score, explanation, and tips if the output is somehow null
+      return output || { 
+        score: 0, 
+        explanation: "Could not calculate score due to an unexpected error from the AI.", 
+        improvementTips: ["Review spending habits.", "Consider creating a budget."] 
+      };
+    } catch (error: any) {
+      console.error("Error in financialHealthFlow calling calculateHealthScorePrompt:", error);
+      let userMessage = "An unexpected error occurred while calculating financial health. Please try again later.";
+      if (error.message && (error.message.includes("503") || error.message.toLowerCase().includes("overloaded") || error.message.toLowerCase().includes("service unavailable"))) {
+        userMessage = "The AI financial health service is temporarily unavailable or overloaded. Please try again in a few moments.";
+      }
+      return {
+        score: 0, // Default score on error
+        explanation: userMessage,
+        improvementTips: ["Please try refreshing the financial health score later."]
+      };
+    }
   }
 );

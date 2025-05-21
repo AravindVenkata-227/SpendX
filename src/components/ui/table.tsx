@@ -1,3 +1,4 @@
+
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
@@ -6,7 +7,9 @@ const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
 >(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
+  // The div is now just a relative container; overflow is handled by the parent ScrollArea's Viewport.
+  // The table itself will expand based on its content.
+  <div className="relative w-full">
     <table
       ref={ref}
       className={cn("w-full caption-bottom text-sm", className)}

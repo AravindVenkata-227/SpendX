@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
+  DialogTrigger, // Added DialogTrigger
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -80,7 +81,7 @@ export default function AddTransactionDialog({ currentUser, selectedAccountId, a
   });
 
   const selectedAccount = allAccounts.find(acc => acc.id === selectedAccountId);
-  const accountDisplayName = selectedAccount ? `${selectedAccount.name} (${selectedAccount.type})` : "the selected account";
+  const accountDisplayName = selectedAccount ? `${selectedAccount.name} (${selectedAccount.accountNumberLast4})` : "the selected account";
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!currentUser) {

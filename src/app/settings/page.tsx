@@ -35,7 +35,7 @@ export default function SettingsPage() {
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(defaultNotificationPrefs);
   const router = useRouter();
   const { toast } = useToast();
-
+  
   const [currentTheme, setCurrentTheme] = useState<Theme>("system");
   const [showInvestmentCard, setShowInvestmentCard] = useState(false);
 
@@ -70,7 +70,7 @@ export default function SettingsPage() {
     if (savedTheme) {
       applyTheme(savedTheme);
     } else {
-      applyTheme("system");
+      applyTheme("system"); 
     }
   }, [applyTheme]);
 
@@ -78,7 +78,7 @@ export default function SettingsPage() {
     if (currentTheme !== "system") return;
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
-      applyTheme("system");
+      applyTheme("system"); 
     };
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
@@ -92,13 +92,13 @@ export default function SettingsPage() {
       if (profile?.notificationPreferences) {
         setNotificationPrefs(profile.notificationPreferences);
       } else {
-        setNotificationPrefs(defaultNotificationPrefs);
+        setNotificationPrefs(defaultNotificationPreferences);
       }
     } catch (error) {
       console.error("Error fetching profile in settings:", error);
       toast({ title: "Error Loading Profile", description: "Could not load profile settings.", variant: "destructive" });
-      setUserProfile(null);
-      setNotificationPrefs(defaultNotificationPrefs);
+      setUserProfile(null); 
+      setNotificationPrefs(defaultNotificationPreferences); 
     } finally {
       setIsLoadingProfile(false);
     }
@@ -114,7 +114,7 @@ export default function SettingsPage() {
         setCurrentUser(null);
         setUserProfile(null);
         setIsLoadingProfile(false);
-        router.push('/login');
+        router.push('/login'); 
       }
       setIsLoadingAuth(false);
     });
@@ -126,21 +126,20 @@ export default function SettingsPage() {
         toast({ title: "Authentication Error", description: "You must be logged in to change preferences.", variant: "destructive" });
         return;
     }
-
+    
     if (!isLoadingProfile && !userProfile) {
-        toast({
-            title: "Profile Data Missing",
-            description: "Your user profile could not be loaded. Preferences cannot be saved at this time. Please log out and back in, or contact support if the issue persists.",
-            variant: "destructive"
+        toast({ 
+            title: "Profile Data Missing", 
+            description: "Your user profile could not be loaded. Preferences cannot be saved at this time. Please log out and back in, or contact support if the issue persists.", 
+            variant: "destructive" 
         });
-        // Attempt to re-fetch profile if user object exists but profile is null after initial load.
-        if (currentUser) await fetchProfileForSettings(currentUser);
+        if (currentUser) await fetchProfileForSettings(currentUser); 
         return;
     }
 
 
     const updatedPrefs = { ...notificationPrefs, [prefKey]: value };
-    setNotificationPrefs(updatedPrefs);
+    setNotificationPrefs(updatedPrefs); 
 
     try {
       await updateUserProfile(currentUser.uid, { notificationPreferences: updatedPrefs });
@@ -148,20 +147,19 @@ export default function SettingsPage() {
     } catch (error: any) {
       console.error("Error updating notification preferences:", error);
       let description = error.message || "Could not save notification preferences. Please try again.";
-
+      
       if (error.message && error.message.includes("No document to update")) {
-          description = "Your user profile document was not found, so preferences cannot be saved. This can happen if profile creation failed during signup. Please try logging out and back in. If the issue persists, contact support.";
+          description = "Your user profile document was not found. Cannot save preferences. Please try logging out and back in, or contact support if this persists.";
       } else if (error.message && error.message.toLowerCase().includes('permission denied')) {
         description = "Permission Denied: Could not save preferences. Ensure Firestore rules are deployed correctly and allow updates to 'notificationPreferences'.";
       }
-
+      
       toast({
         title: "Error Updating Preferences",
         description: description,
         variant: "destructive",
       });
-
-      // Re-fetch profile to revert to last saved state if update failed
+      
       if (currentUser) {
         await fetchProfileForSettings(currentUser);
       }
@@ -212,7 +210,7 @@ export default function SettingsPage() {
               </Button>
             </CardContent>
           </Card>
-
+          
           <Card className="shadow-lg">
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -231,12 +229,12 @@ export default function SettingsPage() {
                 <div className="flex flex-col items-center justify-center text-center text-muted-foreground py-4 p-3 bg-destructive/10 rounded-md">
                   <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
                   <p className="font-semibold">Profile Not Found</p>
-                  <p className="text-sm">Your user profile data could not be loaded. Notification preferences cannot be set at this time. This might happen if profile creation failed during signup. Please try logging out and back in, or contact support if the issue persists.</p>
+                  <p className="text-sm">Your user profile data could not be loaded. Notification preferences cannot be set at this time. Please try logging out and back in, or contact support if the issue persists.</p>
                 </div>
               ) : (
                 <>
-                  <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between space-x-0 sm:space-x-2 p-3 bg-muted/50 rounded-md">
-                    <Label htmlFor="overspending-alerts" className="flex flex-col space-y-1 flex-grow">
+                  <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
+                    <Label htmlFor="overspending-alerts" className="flex flex-col space-y-1">
                       <span>Overspending Alerts (Toast)</span>
                       <span className="font-normal leading-snug text-muted-foreground">
                         Get toast notifications about significant overspending.
@@ -248,11 +246,10 @@ export default function SettingsPage() {
                       onCheckedChange={(checked) => handleNotificationPrefChange('onOverspending', checked)}
                       aria-label="Toggle overspending alerts"
                       disabled={!userProfile || isLoadingProfile}
-                      className="self-end sm:self-center"
                     />
                   </div>
-                  <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between space-x-0 sm:space-x-2 p-3 bg-muted/50 rounded-md">
-                    <Label htmlFor="large-transaction-alerts" className="flex flex-col space-y-1 flex-grow">
+                  <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
+                    <Label htmlFor="large-transaction-alerts" className="flex flex-col space-y-1">
                       <span>Large Transaction Alerts (Toast)</span>
                       <span className="font-normal leading-snug text-muted-foreground">
                         Receive toast alerts for unusually large transactions.
@@ -264,11 +261,10 @@ export default function SettingsPage() {
                       onCheckedChange={(checked) => handleNotificationPrefChange('onLargeTransactions', checked)}
                       aria-label="Toggle large transaction alerts"
                       disabled={!userProfile || isLoadingProfile}
-                       className="self-end sm:self-center"
                     />
                   </div>
-                  <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between space-x-0 sm:space-x-2 p-3 bg-muted/50 rounded-md">
-                    <Label htmlFor="savings-opportunity-alerts" className="flex flex-col space-y-1 flex-grow">
+                  <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
+                    <Label htmlFor="savings-opportunity-alerts" className="flex flex-col space-y-1">
                       <span>Savings Opportunity Alerts (Toast)</span>
                       <span className="font-normal leading-snug text-muted-foreground">
                         Get toast insights on potential savings opportunities.
@@ -280,11 +276,10 @@ export default function SettingsPage() {
                       onCheckedChange={(checked) => handleNotificationPrefChange('onSavingsOpportunities', checked)}
                       aria-label="Toggle savings opportunity alerts"
                       disabled={!userProfile || isLoadingProfile}
-                       className="self-end sm:self-center"
                     />
                   </div>
-                  <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between space-x-0 sm:space-x-2 p-3 bg-muted/50 rounded-md">
-                    <Label htmlFor="email-ai-suggestions" className="flex flex-col space-y-1 flex-grow">
+                  <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
+                    <Label htmlFor="email-ai-suggestions" className="flex flex-col space-y-1">
                       <span>Email AI-Generated Insights</span>
                       <span className="font-normal leading-snug text-muted-foreground">
                         Receive important AI insights via email (simulation only).
@@ -296,7 +291,6 @@ export default function SettingsPage() {
                       onCheckedChange={(checked) => handleNotificationPrefChange('emailForAISuggestions', checked)}
                       aria-label="Toggle email AI suggestions"
                       disabled={!userProfile || isLoadingProfile}
-                       className="self-end sm:self-center"
                     />
                   </div>
                 </>
@@ -317,22 +311,22 @@ export default function SettingsPage() {
               <div className="p-3 bg-muted/50 rounded-md">
                 <Label htmlFor="theme-select">Theme</Label>
                  <div className="flex gap-2 mt-2">
-                    <Button
-                        variant={currentTheme === 'light' ? 'default' : 'outline'}
+                    <Button 
+                        variant={currentTheme === 'light' ? 'default' : 'outline'} 
                         onClick={() => applyTheme('light')}
                         className="flex-1"
                     >
                         <Sun className="mr-2 h-4 w-4" /> Light
                     </Button>
-                    <Button
-                        variant={currentTheme === 'dark' ? 'default' : 'outline'}
+                    <Button 
+                        variant={currentTheme === 'dark' ? 'default' : 'outline'} 
                         onClick={() => applyTheme('dark')}
                         className="flex-1"
                     >
                         <Moon className="mr-2 h-4 w-4" /> Dark
                     </Button>
-                    <Button
-                        variant={currentTheme === 'system' ? 'default' : 'outline'}
+                    <Button 
+                        variant={currentTheme === 'system' ? 'default' : 'outline'} 
                         onClick={() => applyTheme('system')}
                         className="flex-1"
                     >
@@ -352,8 +346,8 @@ export default function SettingsPage() {
               <CardDescription>Enable or disable new and experimental features.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between space-x-0 sm:space-x-2 p-3 bg-muted/50 rounded-md">
-                <Label htmlFor="show-investment-card" className="flex flex-col space-y-1 flex-grow">
+              <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-md">
+                <Label htmlFor="show-investment-card" className="flex flex-col space-y-1">
                   <span>AI Investment Idea Generator</span>
                   <span className="font-normal leading-snug text-muted-foreground">
                     Show the AI-powered investment idea generator on the dashboard.
@@ -367,7 +361,6 @@ export default function SettingsPage() {
                   checked={showInvestmentCard}
                   onCheckedChange={handleInvestmentCardToggle}
                   aria-label="Toggle AI Investment Idea Generator visibility"
-                  className="self-end sm:self-center"
                 />
               </div>
             </CardContent>
@@ -383,3 +376,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+    

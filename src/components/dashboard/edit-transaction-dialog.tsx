@@ -25,7 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { updateTransaction } from '@/services/transactionService';
 import type { User } from 'firebase/auth';
 import { TransactionCategories, type TransactionCategory, type UITransactionType, type TransactionUpdateData } from '@/types';
-import { Loader2, Calendar as CalendarIcon, Utensils, FileText, ShoppingCart, Briefcase, Film, Car, BookOpen, Home, HeartPulse, Gift, Plane, TrendingUp, CircleDollarSign } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, Utensils, FileText, ShoppingCart, Briefcase, Film, Car, BookOpen, Home, PiggyBank, Landmark, CreditCard, CircleDollarSign, HeartPulse, Building, Gift, Plane, TrendingUp } from 'lucide-react';
 import { format, parse, isValid, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -52,7 +52,7 @@ const formSchema = z.object({
   amount: z.coerce.number().positive({ message: "Amount must be positive." }),
   type: z.enum(['debit', 'credit'], { required_error: "Please select transaction type." }),
   category: z.enum(TransactionCategories, { required_error: "Please select a category." }),
-  date: z.date({ required_error: "Please select a date." }).nullable(),
+  date: z.date({ required_error: "Please select a date." }),
 });
 
 interface EditTransactionDialogProps {
@@ -61,7 +61,7 @@ interface EditTransactionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onTransactionUpdated: () => void;
-  accountName?: string;
+  accountName?: string; // Optional: for display purposes
 }
 
 export default function EditTransactionDialog({ currentUser, transactionToEdit, open, onOpenChange, onTransactionUpdated, accountName }: EditTransactionDialogProps) {
@@ -81,27 +81,18 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
 
   useEffect(() => {
     if (transactionToEdit && open) {
-      let transactionDate: Date | null = new Date();
-      let dateToParse = transactionToEdit.date; // This is expected to be 'dd/MM/yyyy' from UI mapping
-
-      // Attempt to parse the display format 'dd/MM/yyyy'
-      let parsedDate = parse(dateToParse, 'dd/MM/yyyy', new Date());
-
-      if (!isValid(parsedDate)) {
-        // If 'dd/MM/yyyy' parsing fails, try 'yyyy-MM-dd' (from Firestore)
-        parsedDate = parseISO(transactionToEdit.date); // Firestore date is YYYY-MM-DD
-      }
-      
+      let transactionDate = new Date(); // Default to today
+      // Firestore date is YYYY-MM-DD string
+      const parsedDate = parseISO(transactionToEdit.date);
       if (isValid(parsedDate)) {
         transactionDate = parsedDate;
       } else {
-        console.warn("EditTransactionDialog: Invalid date string from transactionToEdit after attempting parse:", transactionToEdit.date, ". Defaulting to today.");
-        transactionDate = new Date();
+        console.warn("Invalid date string from transactionToEdit:", transactionToEdit.date);
       }
 
       form.reset({
         description: transactionToEdit.description,
-        amount: Math.abs(transactionToEdit.amount),
+        amount: Math.abs(transactionToEdit.amount), // Form always deals with positive amount
         type: transactionToEdit.type,
         category: transactionToEdit.category as TransactionCategory,
         date: transactionDate,
@@ -114,22 +105,17 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
       toast({ title: "Error", description: "User or transaction not available.", variant: "destructive" });
       return;
     }
-    if (!values.date) {
-      toast({ title: "Error", description: "Please select a transaction date.", variant: "destructive" });
-      form.setError("date", { type: "manual", message: "Date is required." });
-      return;
-    }
     setIsLoading(true);
     try {
       const transactionAmount = values.type === 'debit' ? -Math.abs(values.amount) : Math.abs(values.amount);
       const iconName = categoryToIconMap[values.category as TransactionCategory] || "CircleDollarSign";
-
+      
       const updateData: TransactionUpdateData = {
         description: values.description,
-        amount: transactionAmount,
+        amount: transactionAmount, // Service expects signed amount
         type: values.type,
         category: values.category,
-        date: format(values.date, 'yyyy-MM-dd'), // Store as YYYY-MM-DD
+        date: format(values.date, 'yyyy-MM-dd'),
         iconName: iconName,
       };
 
@@ -144,14 +130,14 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
       setIsLoading(false);
     }
   };
-
-  const dialogDescription = accountName
+  
+  const dialogDescription = accountName 
     ? `Edit transaction details for account: ${accountName}.`
     : "Edit transaction details.";
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
-      if (!isLoading) {
+      if (!isLoading) { // Prevent closing while loading
         onOpenChange(isOpen);
       }
     }}>
@@ -166,19 +152,19 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
           <div>
             <Label htmlFor="description-edit">Description</Label>
             <Input id="description-edit" placeholder="e.g., Coffee, Salary" {...form.register('description')} disabled={isLoading} className="mt-1" />
-            {form.formState.errors.description && <p className="text-xs text-destructive mt-1">{form.formState.errors.description.message}</p>}
+            {form.formState.errors.description && <p className="text-xs text-red-500 mt-1">{form.formState.errors.description.message}</p>}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="amount-edit">Amount (₹)</Label>
               <Input id="amount-edit" type="number" step="0.01" placeholder="0.00" {...form.register('amount')} disabled={isLoading} className="mt-1" />
-              {form.formState.errors.amount && <p className="text-xs text-destructive mt-1">{form.formState.errors.amount.message}</p>}
+              {form.formState.errors.amount && <p className="text-xs text-red-500 mt-1">{form.formState.errors.amount.message}</p>}
             </div>
             <div>
               <Label>Type</Label>
               <RadioGroup
-                value={form.watch('type')}
+                value={form.watch('type')} // Controlled component
                 onValueChange={(value) => form.setValue('type', value as 'debit' | 'credit')}
                 className="flex items-center space-x-2 mt-2"
                 disabled={isLoading}
@@ -192,15 +178,15 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
                   <Label htmlFor="credit-edit" className="font-normal">Credit</Label>
                 </div>
               </RadioGroup>
-              {form.formState.errors.type && <p className="text-xs text-destructive mt-1">{form.formState.errors.type.message}</p>}
+              {form.formState.errors.type && <p className="text-xs text-red-500 mt-1">{form.formState.errors.type.message}</p>}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="category-edit">Category</Label>
               <Select
-                value={form.watch('category')}
+                value={form.watch('category')} // Controlled component
                 onValueChange={(value) => form.setValue('category', value as TransactionCategory)}
                 disabled={isLoading}
               >
@@ -213,33 +199,32 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
                   ))}
                 </SelectContent>
               </Select>
-              {form.formState.errors.category && <p className="text-xs text-destructive mt-1">{form.formState.errors.category.message}</p>}
+              {form.formState.errors.category && <p className="text-xs text-red-500 mt-1">{form.formState.errors.category.message}</p>}
             </div>
             <div>
-              <Label htmlFor="date-edit-transaction">Date</Label>
+              <Label htmlFor="date-edit">Date</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
-                    id="date-edit-transaction-trigger"
                     variant={"outline"}
                     className={cn("w-full justify-start text-left font-normal mt-1", !form.watch('date') && "text-muted-foreground")}
                     disabled={isLoading}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {form.watch('date') ? format(form.watch('date')!, "PPP") : <span>Pick a date</span>}
+                    {form.watch('date') ? format(form.watch('date'), "PPP") : <span>Pick a date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 z-[51]">
+                <PopoverContent className="w-auto p-0">
                   <Calendar
                     mode="single"
                     selected={form.watch('date')}
-                    onSelect={(date) => form.setValue('date', date || null)}
+                    onSelect={(date) => date && form.setValue('date', date)}
                     initialFocus
                     disabled={isLoading}
                   />
                 </PopoverContent>
               </Popover>
-              {form.formState.errors.date && <p className="text-xs text-destructive mt-1">{form.formState.errors.date.message}</p>}
+              {form.formState.errors.date && <p className="text-xs text-red-500 mt-1">{form.formState.errors.date.message}</p>}
             </div>
           </div>
 
@@ -259,5 +244,3 @@ export default function EditTransactionDialog({ currentUser, transactionToEdit, 
     </Dialog>
   );
 }
-
-    

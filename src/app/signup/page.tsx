@@ -35,7 +35,7 @@ export default function SignupPage() {
     setIsLoading(true);
     try {
       const userCredential: UserCredential = await createUserWithEmailAndPassword(auth, email, password);
-
+      
       if (userCredential.user) {
         try {
           await createUserProfile(userCredential.user.uid, fullName, email);
@@ -45,14 +45,17 @@ export default function SignupPage() {
             variant: "default",
           });
         } catch (profileError: any) {
+          // This catch block is specifically for errors from createUserProfile
           console.error('Profile creation error after signup:', profileError);
           toast({
             title: "Account Created, Profile Issue",
-            description: profileError.message || "Your account was created, but we couldn't save your profile information. Please try logging in. If issues persist, contact support.",
-            variant: "destructive",
+            description: "Your account was created, but we couldn't save your profile information. Please try logging in. If issues persist, contact support. (Details in server console)",
+            variant: "destructive", // Or "default" if you still want them to proceed to login
           });
+          // Still proceed to login, as auth account was created
         }
       } else {
+         // This case should ideally not happen if createUserWithEmailAndPassword succeeds
          toast({
           title: "Account Created (Profile Skipped)",
           description: "Welcome! Please login to continue. (User object missing for profile creation)",
@@ -61,6 +64,7 @@ export default function SignupPage() {
       }
       router.push('/login');
     } catch (authError: any) {
+      // This catch block is primarily for errors from createUserWithEmailAndPassword
       console.error('Signup auth error:', authError);
       let toastTitle = "Signup Failed";
       let errorMessage = "Could not create account. Please try again.";
@@ -69,10 +73,10 @@ export default function SignupPage() {
         errorMessage = 'This email address is already in use. Please try a different email or login.';
       } else if (authError.code === 'auth/weak-password') {
         errorMessage = 'The password is too weak. Please use a stronger password (at least 6 characters).';
-      } else if (authError.message) {
+      } else if (authError.message) { // Generic auth error
         errorMessage = authError.message;
       }
-
+      
       toast({
         title: toastTitle,
         description: errorMessage,
@@ -187,8 +191,8 @@ export default function SignupPage() {
           </CardFooter>
         </form>
       </Card>
-      <footer className="py-6 px-4 md:px-6 mt-8 text-center">
-        <p className="text-sm text-muted-foreground">
+      <footer className="py-6 px-4 md:px-6 mt-8">
+        <p className="text-center text-sm text-muted-foreground">
           © {new Date().getFullYear()} FinTrack AI. All rights reserved.
         </p>
       </footer>

@@ -33,12 +33,12 @@ const PREDEFINED_CHART_CONFIG: ChartConfig = {
   "Transport": { label: "Transport", color: "hsl(var(--chart-4))" },
   "Entertainment": { label: "Entertainment", color: "hsl(var(--chart-5))" },
   "Other": { label: "Other", color: "hsl(var(--muted))" }, 
-  "Groceries": { label: "Groceries", color: "hsl(var(--chart-1))" }, 
+  "Groceries": { label: "Groceries", color: "hsl(var(--chart-1))" }, // Example, can reuse or add more chart colors
   "Utilities": { label: "Utilities", color: "hsl(var(--chart-2))" },
   "Rent/Mortgage": { label: "Rent/Mortgage", color: "hsl(var(--chart-3))" },
   "Health": { label: "Health", color: "hsl(var(--chart-4))" },
   "Education": { label: "Education", color: "hsl(var(--chart-5))" },
-  "Income": { label: "Income", color: "hsl(var(--accent))" }, 
+  "Income": { label: "Income", color: "hsl(var(--accent))" }, // Income is not typically in spending chart
   "Investment": { label: "Investment", color: "hsl(var(--chart-1))" },
   "Travel": { label: "Travel", color: "hsl(var(--chart-2))" },
   "Gifts": { label: "Gifts", color: "hsl(var(--chart-3))" },
@@ -146,7 +146,7 @@ export default function SpendingCategoryChartCard({ refreshTrigger }: SpendingCa
     };
 
     fetchAndProcessTransactions();
-  }, [currentUser, toast, refreshTrigger]); 
+  }, [currentUser, toast, refreshTrigger]); // Add refreshTrigger here
 
   if (isLoading) {
     return (
@@ -218,7 +218,7 @@ export default function SpendingCategoryChartCard({ refreshTrigger }: SpendingCa
             </Pie>
              <ChartLegend
               content={<ChartLegendContent nameKey="name" />}
-              className="-translate-y-2 flex-wrap gap-x-4 gap-y-1 [&>*]:basis-full sm:[&>*]:basis-[45%] md:[&>*]:basis-1/4 [&>*]:justify-start sm:[&>*]:justify-center"
+              className="-translate-y-2 flex-wrap gap-2 [&>*]:basis-1/4 [&>*]:justify-center"
             />
           </PieChart>
         </ChartContainer>
